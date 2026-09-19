@@ -71,6 +71,8 @@ Only `searchQueries` is required. Everything else has a sensible default.
 | `maxItems` | `integer` | No | Maximum jobs to return. Default `100`. LinkedIn serves up to 1,000 per query. | `1000` |
 | `startUrls` | `array` | No | Use LinkedIn search URLs directly instead of building them from filters. Default `[]`. | `["https://www.linkedin.com/jobs/search?keywords=devops"]` |
 
+![Search input section in Apify Console](https://raw.githubusercontent.com/Abhijeetshakya/scrapper2/main/images/input-search.png)
+
 ### 🎚️ Filters
 
 | Field | Type | Required | Description | Example |
@@ -98,6 +100,8 @@ Each of these adds requests and increases runtime. All are `false` by default.
 >
 > Leave this **off** for fast bulk collection. Turn it on only when pay is the point of the search.
 
+![Filters and Deep scraping options in Apify Console](https://raw.githubusercontent.com/Abhijeetshakya/scrapper2/main/images/input-filters.png)
+
 ### 🛠️ Performance and output control
 
 | Field | Type | Required | Description | Example |
@@ -113,6 +117,8 @@ Each of these adds requests and increases runtime. All are `false` by default.
 | `paginationBatchSize` | `integer` | No | Result pages queued per parallel wave. Default `8`. Higher fetches more in parallel but over-fetches on short result sets. | `12` |
 | `requestDelayMinMs` | `integer` | No | Artificial minimum delay before each request, in ms. Default `0`. Leave at `0` — a delay here holds a concurrency slot open while it waits. | `0` |
 | `requestDelayMaxMs` | `integer` | No | Upper bound of the artificial delay. Default `0` (disabled). Only useful for targets needing jittered spacing. | `0` |
+
+![Proxy and performance settings in Apify Console](https://raw.githubusercontent.com/Abhijeetshakya/scrapper2/main/images/input-proxy-performance.png)
 
 ### 📝 Example input
 
