@@ -6,20 +6,8 @@
         "jobs": {
             "type": "string",
             "title": "Scraped jobs",
-            "description": "All scraped job listings from the default dataset, as clean JSON.",
-            "template": "{{links.apiDefaultDatasetUrl}}/items?clean=true&format=json"
-        },
-        "jobsCsv": {
-            "type": "string",
-            "title": "Scraped jobs (CSV)",
-            "description": "The same job listings exported as a CSV file.",
-            "template": "{{links.apiDefaultDatasetUrl}}/items?clean=true&format=csv"
-        },
-        "runOverview": {
-            "type": "string",
-            "title": "Run overview",
-            "description": "Open this run in Apify Console to browse results and logs.",
-            "template": "{{links.publicRunUrl}}"
+            "description": "All scraped job listings in the default dataset.",
+            "template": "{{links.apiDefaultDatasetUrl}}/items"
         }
     }
 }
