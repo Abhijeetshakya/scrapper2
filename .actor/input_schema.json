@@ -6,57 +6,167 @@
         "searchQueries": {
             "title": "Search Queries",
             "type": "array",
-            "description": "List of job titles or keywords to search for.",
+            "description": "Job titles or keywords to search for. Each query is searched separately and results are de-duplicated across them.",
             "editor": "stringList",
-            "default": ["Software Engineer"]
+            "prefill": ["Software Engineer"],
+            "default": ["Software Engineer"],
+            "sectionCaption": "Search"
         },
         "location": {
             "title": "Location",
             "type": "string",
-            "description": "The target location (e.g., 'United States', 'London').",
+            "description": "Target location, e.g. 'United States', 'London', 'Berlin, Germany'.",
             "editor": "textfield",
+            "prefill": "United States",
             "default": "United States"
+        },
+        "startUrls": {
+            "title": "Start URLs",
+            "type": "array",
+            "description": "Optional. Provide LinkedIn job search URLs directly. When set, these replace the queries and filters above.",
+            "editor": "requestListSources",
+            "default": []
         },
         "maxItems": {
             "title": "Maximum Items",
             "type": "integer",
-            "description": "Maximum number of jobs to scrape.",
+            "description": "Maximum number of jobs to scrape across all queries. LinkedIn serves at most 1000 results per query.",
+            "editor": "number",
+            "minimum": 1,
+            "prefill": 100,
             "default": 100
-        },
-        "scrapeJobDetails": {
-            "title": "Deep Scrape: Job Details",
-            "type": "boolean",
-            "description": "Navigate into each job page to extract full descriptions, seniority, skills, etc. (uses more requests).",
-            "default": false
-        },
-        "scrapeCompanyDetails": {
-            "title": "Deep Scrape: Company Details",
-            "type": "boolean",
-            "description": "Navigate into company pages to extract industry and size (uses more requests).",
-            "default": false
         },
         "datePosted": {
             "title": "Date Posted",
             "type": "string",
-            "description": "Filter by date posted.",
+            "description": "Only return jobs posted within this window.",
             "editor": "select",
             "default": "any",
-            "enum": ["any", "past-24h", "past-week", "past-month"]
+            "enum": ["any", "past24hours", "pastWeek", "pastMonth"],
+            "enumTitles": ["Any time", "Past 24 hours", "Past week", "Past month"],
+            "sectionCaption": "Filters"
+        },
+        "jobType": {
+            "title": "Job Type",
+            "type": "string",
+            "description": "Filter by employment type.",
+            "editor": "select",
+            "default": "any",
+            "enum": ["any", "fullTime", "partTime", "contract", "temporary", "internship"],
+            "enumTitles": ["Any", "Full-time", "Part-time", "Contract", "Temporary", "Internship"]
+        },
+        "experienceLevel": {
+            "title": "Experience Level",
+            "type": "string",
+            "description": "Filter by required experience level.",
+            "editor": "select",
+            "default": "any",
+            "enum": ["any", "internship", "entryLevel", "associate", "midSenior", "director", "executive"],
+            "enumTitles": ["Any", "Internship", "Entry level", "Associate", "Mid-Senior level", "Director", "Executive"]
         },
         "remoteFilter": {
-            "title": "Remote Status",
+            "title": "Workplace Type",
             "type": "string",
-            "description": "Filter by remote, on-site, or hybrid.",
+            "description": "Filter by remote, on-site, or hybrid work.",
             "editor": "select",
             "default": "any",
-            "enum": ["any", "remote", "on-site", "hybrid"]
+            "enum": ["any", "onSite", "remote", "hybrid"],
+            "enumTitles": ["Any", "On-site", "Remote", "Hybrid"]
+        },
+        "scrapeJobDetails": {
+            "title": "Deep Scrape: Job Details",
+            "type": "boolean",
+            "description": "Fetch each job page for the full description, seniority, employment type, skills and apply link. Costs one extra request per job.",
+            "default": false,
+            "sectionCaption": "Deep scraping"
+        },
+        "scrapeCompanyDetails": {
+            "title": "Deep Scrape: Company Details",
+            "type": "boolean",
+            "description": "Fetch each company's About page for industry, size and website. Costs one extra request per unique company, and adds separate records with type 'COMPANY' to the dataset.",
+            "default": false
+        },
+        "outputFields": {
+            "title": "Output Fields",
+            "type": "array",
+            "description": "Restrict dataset records to these fields. Leave empty to keep everything. 'jobId' and 'type' are always kept.",
+            "editor": "stringList",
+            "default": []
         },
         "proxyConfiguration": {
             "title": "Proxy Configuration",
             "type": "object",
-            "description": "Residential proxies are highly recommended for large scrapes to prevent blocking.",
+            "description": "Residential proxies are strongly recommended for large scrapes. LinkedIn blocks datacenter IPs aggressively.",
             "editor": "proxy",
-            "default": { "useApifyProxy": true }
+            "default": { "useApifyProxy": true },
+            "sectionCaption": "Proxy and performance"
+        },
+        "maxConcurrency": {
+            "title": "Max Concurrency",
+            "type": "integer",
+            "description": "Maximum requests in flight at once. Lower this if you see a high block rate.",
+            "editor": "number",
+            "minimum": 1,
+            "default": 10
+        },
+        "requestsPerMinuteMultiplier": {
+            "title": "Requests Per Minute Multiplier",
+            "type": "integer",
+            "description": "Request rate cap, calculated as Max Concurrency x this value. Bounds the request rate, which is a separate limit from how many run in parallel.",
+            "editor": "number",
+            "minimum": 1,
+            "default": 30
+        },
+        "maxRequestRetries": {
+            "title": "Max Request Retries",
+            "type": "integer",
+            "description": "How many times to retry a blocked or failed request before giving up.",
+            "editor": "number",
+            "minimum": 0,
+            "default": 5
+        },
+        "paginationBatchSize": {
+            "title": "Pagination Batch Size",
+            "type": "integer",
+            "description": "Search result pages queued per wave. Higher fetches more pages in parallel but over-fetches more on short result sets.",
+            "editor": "number",
+            "minimum": 1,
+            "default": 8
+        },
+        "requestDelayMinMs": {
+            "title": "Request Delay Minimum (ms)",
+            "type": "integer",
+            "description": "Optional artificial delay before each request. Leave at 0: a delay here holds a concurrency slot open while it waits, so it costs throughput twice over.",
+            "editor": "number",
+            "minimum": 0,
+            "default": 0
+        },
+        "requestDelayMaxMs": {
+            "title": "Request Delay Maximum (ms)",
+            "type": "integer",
+            "description": "Upper bound of the artificial per-request delay. 0 disables it entirely.",
+            "editor": "number",
+            "minimum": 0,
+            "default": 0
+        },
+        "resumeFromPreviousRun": {
+            "title": "Resume From Previous Run",
+            "type": "boolean",
+            "description": "Skip jobs and companies already scraped in earlier runs of this actor, using IDs saved in the key-value store.",
+            "default": false,
+            "sectionCaption": "Run control"
+        },
+        "webhookUrl": {
+            "title": "Webhook URL",
+            "type": "string",
+            "description": "Optional. Receives a POST with a JSON payload when the error rate spikes, and on completion if enabled below.",
+            "editor": "textfield"
+        },
+        "notifyOnCompletion": {
+            "title": "Notify On Completion",
+            "type": "boolean",
+            "description": "Send a webhook when the run finishes. Requires a Webhook URL.",
+            "default": false
         }
     },
     "required": ["searchQueries"]

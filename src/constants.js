@@ -22,6 +22,13 @@ export const DATE_POSTED_MAP = {
     past24hours: 'r86400',
     pastWeek: 'r604800',
     pastMonth: 'r2592000',
+    // Hyphenated aliases: these were the values shipped in input_schema.json,
+    // so saved tasks and existing API callers still send them. An unrecognised
+    // key resolves to undefined and the filter is dropped *silently*, so the
+    // aliases stay until those callers are known to be gone.
+    'past-24h': 'r86400',
+    'past-week': 'r604800',
+    'past-month': 'r2592000',
 };
 
 /**
@@ -57,6 +64,8 @@ export const REMOTE_FILTER_MAP = {
     onSite: '1',
     remote: '2',
     hybrid: '3',
+    // Alias, see DATE_POSTED_MAP.
+    'on-site': '1',
 };
 
 /**

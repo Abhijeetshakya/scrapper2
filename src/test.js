@@ -7,7 +7,7 @@ import { load } from 'cheerio';
 import { parseJobListing, parseJobDetails } from './parsers.js';
 import {
     buildSearchUrls, cleanText, extractJobId, detectWorkplaceType, extractCompanyId,
-    parseSalary, parseLocation, isChallengePage, filterOutputFields,
+    extractCompanyKey, parseSalary, parseLocation, isChallengePage, filterOutputFields,
     buildPaginationUrls, canonicalizeUrl,
 } from './utils.js';
 
@@ -150,6 +150,18 @@ assertEqual(extractCompanyId('https://www.linkedin.com/company/12345'), '12345',
 assertEqual(extractCompanyId('https://www.linkedin.com/company/acme-corp'), null, 'returns null for slug-based URL');
 assertEqual(extractCompanyId(null), null, 'handles null');
 
+// ─── Test: extractCompanyKey ─────────────────────────────────────────
+// Guest job cards link companies by slug, so extractCompanyId returns null for
+// almost all of them. This is the key company deduplication actually runs on.
+console.log('\n🧪 Testing extractCompanyKey()');
+assertEqual(extractCompanyKey('https://www.linkedin.com/company/acme-corp'), 'acme-corp', 'extracts slug');
+assertEqual(extractCompanyKey('https://www.linkedin.com/company/12345'), '12345', 'extracts numeric ID');
+assertEqual(extractCompanyKey('https://www.linkedin.com/company/acme-corp?trk=public_jobs'), 'acme-corp', 'ignores tracking params');
+assertEqual(extractCompanyKey('/company/Acme-Corp/'), 'acme-corp', 'handles relative URL and normalises case');
+assertEqual(extractCompanyKey('https://www.linkedin.com/company/acme-corp/about'), 'acme-corp', 'ignores trailing path');
+assertEqual(extractCompanyKey(null), null, 'handles null');
+assertEqual(extractCompanyKey(''), null, 'handles empty string');
+
 // ─── Test: parseSalary ────────────────────────────────────────────────
 console.log('\n🧪 Testing parseSalary()');
 const salary1 = parseSalary('$150,000 - $200,000');
@@ -252,6 +264,30 @@ const minimalUrls = buildSearchUrls({
 assert(!minimalUrls[0].includes('f_TPR'), 'omits empty date filter');
 assert(!minimalUrls[0].includes('f_JT'), 'omits empty job type filter');
 
+// Hyphenated values were shipped in input_schema.json, so saved tasks still send
+// them. An unmapped value drops the filter silently, so the aliases are tested.
+const aliasUrls = buildSearchUrls({
+    searchQueries: ['Test'],
+    location: 'US',
+    datePosted: 'past-24h',
+    jobType: 'any',
+    experienceLevel: 'any',
+    remoteFilter: 'on-site',
+});
+assert(aliasUrls[0].includes('f_TPR=r86400'), 'legacy past-24h value still maps to a date filter');
+assert(aliasUrls[0].includes('f_WT=1'), 'legacy on-site value still maps to a workplace filter');
+
+const canonicalUrls = buildSearchUrls({
+    searchQueries: ['Test'],
+    location: 'US',
+    datePosted: 'past24hours',
+    jobType: 'any',
+    experienceLevel: 'any',
+    remoteFilter: 'onSite',
+});
+assert(canonicalUrls[0].includes('f_TPR=r86400'), 'canonical past24hours maps to a date filter');
+assert(canonicalUrls[0].includes('f_WT=1'), 'canonical onSite maps to a workplace filter');
+
 // ─── Test: parseJobListing ───────────────────────────────────────────
 console.log('\n🧪 Testing parseJobListing()');
 const $search = load(SAMPLE_SEARCH_HTML);
@@ -276,6 +312,18 @@ assert(!job1.jobUrl.includes('trk='), 'strips tracking params');
 assert(job1.scrapedAt, 'includes scrapedAt timestamp');
 assertEqual(job1.workplaceType, 'On-site', 'derives on-site workplace type');
 assertEqual(job1.companyUrl, 'https://www.linkedin.com/company/acme-corp', 'extracts company URL at listing level');
+
+// companyUrl is the base the company "about" URL is built from, so a relative
+// href or a leftover ?trk= would produce an unfetchable address.
+const $relCompany = load(`<li><div class="base-card job-search-card" data-entity-urn="urn:li:jobPosting:3912345680">
+  <a class="base-card__full-link" href="/jobs/view/3912345680"><span class="sr-only">Eng</span></a>
+  <h3 class="base-search-card__title">Eng</h3>
+  <h4 class="base-search-card__subtitle"><a class="hidden-nested-link" href="/company/acme-corp?trk=public_jobs">Acme</a></h4>
+</div></li>`);
+const relJob = parseJobListing($relCompany, $relCompany('li')[0]);
+assertEqual(relJob.companyUrl, 'https://www.linkedin.com/company/acme-corp', 'absolutises and strips tracking from relative company URL');
+assertEqual(extractCompanyKey(relJob.companyUrl), 'acme-corp', 'resulting company URL yields a dedup key');
+assertEqual(`${relJob.companyUrl.replace(/\/$/, '')}/about`, 'https://www.linkedin.com/company/acme-corp/about', 'builds a valid company about URL');
 // Verify removed columns are not present
 assert(!('companyId' in job1), 'companyId column is removed');
 assert(!('isReposted' in job1), 'isReposted column is removed');

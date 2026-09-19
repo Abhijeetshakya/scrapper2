@@ -63,7 +63,13 @@ export function parseJobListing($, element) {
     // and .attr('href') on a Cheerio set returns the FIRST matched element's
     // attribute — so we explicitly resolve the link itself, not just $company.
     const $companyLink = $company.first().is('a') ? $company.first() : $company.find('a').first();
-    const companyUrl = $companyLink.attr('href') || null;
+    let companyUrl = $companyLink.attr('href') || null;
+    if (companyUrl) {
+        if (!companyUrl.startsWith('http')) companyUrl = `${LINKEDIN_BASE}${companyUrl}`;
+        // Tracking parameters have to go: this URL is used as a base to build the
+        // company "about" URL, and `https://...?trk=x` + '/about' is not a URL.
+        companyUrl = canonicalizeUrl(companyUrl);
+    }
 
     // ─── Location ────────────────────────────────────────────────
     const $location = $target.find(

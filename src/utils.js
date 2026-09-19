@@ -110,6 +110,26 @@ export function extractCompanyId(value) {
 }
 
 /**
+ * Derive a stable dedup key for a company from its LinkedIn URL.
+ *
+ * `extractCompanyId` only returns a value for numeric company URLs, but guest
+ * job cards almost always link the slug form (/company/acme-corp), so using it
+ * as the dedup key silently drops nearly every company. This returns the slug
+ * or numeric ID from /company/<x>, falling back to the canonical URL so a key
+ * always exists when a URL does.
+ *
+ * @param {string} companyUrl - Company page URL, absolute or relative
+ * @returns {string|null} Dedup key, or null if no URL was given
+ */
+export function extractCompanyKey(companyUrl) {
+    if (!companyUrl) return null;
+    const match = companyUrl.match(/\/company\/([^/?#]+)/);
+    if (match) return decodeURIComponent(match[1]).toLowerCase();
+    const canonical = canonicalizeUrl(companyUrl);
+    return canonical ? canonical.toLowerCase() : null;
+}
+
+/**
  * Parse a free-text salary string into structured min/max/currency/period fields.
  * Handles formats like "$150,000 - $200,000", "$80K/yr", "€45.5K", "$40 - $60 per hour".
  *

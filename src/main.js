@@ -1,6 +1,6 @@
 import { Actor } from 'apify';
 import { CheerioCrawler, log } from 'crawlee';
-import { buildSearchUrls, isChallengePage, filterOutputFields, buildPaginationUrls } from './utils.js';
+import { buildSearchUrls, isChallengePage, filterOutputFields, buildPaginationUrls, extractCompanyKey, extractCompanyId } from './utils.js';
 import { parseJobListing, parseJobDetails, parseCompanyDetails } from './parsers.js';
 import { LABELS, LINKEDIN_BASE, BLOCKED_STATUS_CODES, DEFAULTS } from './constants.js';
 
@@ -141,19 +141,32 @@ async function pushFiltered(records) {
 
 /**
  * Queue company "about" pages for a batch of jobs in a single addRequests call.
- * The previous version awaited one addRequests per job inside a loop, costing a
- * request-queue round trip per listing instead of one per page.
+ * Batched rather than one addRequests per job, which cost a request-queue round
+ * trip per listing instead of one per page.
+ *
+ * Keyed on the company URL slug, not companyId. This used to read `companyId`
+ * off each job, but that field was dropped from the parsed output, so the guard
+ * below rejected every job and no company page was ever queued - the
+ * scrapeCompanyDetails input silently did nothing. Slugs also work where the
+ * numeric ID does not: guest job cards link companies as /company/<slug>, so
+ * extractCompanyId returns null for most of them even when it is present.
  */
 async function queueCompanies(jobs) {
     if (!scrapeCompanyDetails) return;
     const requests = [];
-    for (const { companyId, companyUrl } of jobs) {
-        if (!companyId || !companyUrl || seenCompanyIds.has(companyId)) continue;
-        seenCompanyIds.add(companyId);
+    for (const { companyUrl } of jobs) {
+        const companyKey = extractCompanyKey(companyUrl);
+        if (!companyKey || seenCompanyIds.has(companyKey)) continue;
+        seenCompanyIds.add(companyKey);
         requests.push({
             url: `${companyUrl.replace(/\/$/, '')}/about`,
-            userData: { label: LABELS.COMPANY, companyId, companyUrl },
-            uniqueKey: `company-${companyId}`,
+            userData: {
+                label: LABELS.COMPANY,
+                companyId: extractCompanyId(companyUrl),
+                companySlug: companyKey,
+                companyUrl,
+            },
+            uniqueKey: `company-${companyKey}`,
         });
     }
     if (requests.length > 0) await crawler.addRequests(requests);
@@ -398,10 +411,10 @@ crawler = new CheerioCrawler({
         // ── COMPANY "about" page ─────────────────────────────────
         } else if (label === LABELS.COMPANY) {
             log.debug(`Parsing company details: ${request.url}`);
-            const { companyId, companyUrl } = request.userData;
+            const { companyId, companySlug, companyUrl } = request.userData;
             const companyData = parseCompanyDetails($, companyId, companyUrl);
 
-            await pushFiltered({ type: 'COMPANY', ...companyData });
+            await pushFiltered({ type: 'COMPANY', companySlug, ...companyData });
         }
     },
 

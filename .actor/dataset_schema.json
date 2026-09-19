@@ -4,162 +4,260 @@
         "type": "object",
         "properties": {
             "jobId": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Job ID",
                 "description": "The unique LinkedIn job posting ID.",
                 "example": "3912345678"
             },
             "title": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Job Title",
                 "description": "The advertised title of the job.",
                 "example": "Senior Software Engineer"
             },
             "company": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Company Name",
                 "description": "Name of the company that posted the job.",
                 "example": "Acme Corp"
             },
             "companyUrl": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Company URL",
                 "description": "URL of the company's LinkedIn page.",
                 "example": "https://www.linkedin.com/company/acme-corp"
             },
             "companyLogo": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Company Logo",
                 "description": "Direct URL to the company's logo image.",
                 "example": "https://media.licdn.com/dms/image/logo.png"
             },
             "location": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Location",
                 "description": "Raw location text as shown on the job card.",
                 "example": "San Francisco, CA"
             },
             "locationParsed": {
-                "type": ["object", "null"],
+                "type": [
+                    "object",
+                    "null"
+                ],
                 "title": "Parsed Location",
                 "description": "Location split into city, state, country and raw text."
             },
             "workplaceType": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Workplace Type",
                 "description": "Remote, Hybrid, or On-site.",
                 "example": "Remote"
             },
             "salary": {
-                "type": ["object", "null"],
+                "type": [
+                    "object",
+                    "null"
+                ],
                 "title": "Salary",
                 "description": "Parsed salary object with min, max, currency, period and raw text. Null when the posting lists no salary."
             },
             "postedDate": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Date Posted",
                 "description": "When the job was posted, as an ISO date or LinkedIn's relative text.",
                 "example": "2024-01-15"
             },
             "jobUrl": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Job URL",
                 "description": "Canonical URL of the job posting, with tracking parameters stripped.",
                 "example": "https://www.linkedin.com/jobs/view/3912345678"
             },
             "scrapedAt": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Scraped At",
                 "description": "ISO 8601 timestamp of when the record was scraped."
             },
             "description": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Description",
                 "description": "Full job description as plain text. Requires Deep Scrape: Job Details."
             },
             "descriptionHtml": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Description HTML",
                 "description": "Full job description with original HTML markup. Requires Deep Scrape: Job Details."
             },
             "seniorityLevel": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Seniority Level",
                 "description": "Seniority as listed in LinkedIn's job criteria.",
                 "example": "Mid-Senior level"
             },
             "employmentType": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Employment Type",
                 "description": "Employment type as listed in LinkedIn's job criteria.",
                 "example": "Full-time"
             },
             "jobFunction": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Job Function",
                 "description": "Job function as listed in LinkedIn's job criteria."
             },
             "industries": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Industries",
                 "description": "Industries as listed in LinkedIn's job criteria."
             },
             "skills": {
-                "type": ["array", "null"],
+                "type": [
+                    "array",
+                    "null"
+                ],
                 "title": "Skills",
                 "description": "Required skills or qualifications extracted from the posting.",
-                "items": { "type": "string" }
+                "items": {
+                    "type": "string"
+                }
             },
             "applicants": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Applicants",
                 "description": "Applicant count text, when LinkedIn exposes one.",
                 "example": "Over 200 applicants"
             },
             "easyApply": {
-                "type": ["boolean", "null"],
+                "type": [
+                    "boolean",
+                    "null"
+                ],
                 "title": "Easy Apply",
                 "description": "True when the posting uses LinkedIn Easy Apply."
             },
             "applyUrl": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Apply URL",
                 "description": "Link to the application, which may point to an external site."
             },
             "detailScrapeFailed": {
-                "type": ["boolean", "null"],
+                "type": [
+                    "boolean",
+                    "null"
+                ],
                 "title": "Detail Scrape Failed",
                 "description": "True when only listing data was saved because the detail page could not be fetched."
             },
             "type": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Record Type",
                 "description": "Set to COMPANY on company records. Absent on job records.",
                 "example": "COMPANY"
             },
             "companyId": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Company ID",
                 "description": "Numeric LinkedIn company ID. Present on company records only."
             },
+            "companySlug": {
+                "type": [
+                    "string",
+                    "null"
+                ],
+                "title": "Company Slug",
+                "description": "LinkedIn company URL slug, used as the dedup key. Present on company records only.",
+                "example": "acme-corp"
+            },
             "name": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Company Name",
                 "description": "Company name. Present on company records only."
             },
             "industry": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Industry",
                 "description": "Company industry. Present on company records only."
             },
             "companySize": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Company Size",
                 "description": "Employee count range. Present on company records only.",
                 "example": "1,001-5,000 employees"
             },
             "website": {
-                "type": ["string", "null"],
+                "type": [
+                    "string",
+                    "null"
+                ],
                 "title": "Website",
                 "description": "Company website. Present on company records only."
             }
@@ -187,17 +285,50 @@
             "display": {
                 "component": "table",
                 "properties": {
-                    "companyLogo": { "label": "Logo", "format": "image" },
-                    "title": { "label": "Job Title", "format": "text" },
-                    "company": { "label": "Company", "format": "text" },
-                    "location": { "label": "Location", "format": "text" },
-                    "workplaceType": { "label": "Workplace", "format": "text" },
-                    "salary": { "label": "Salary", "format": "object" },
-                    "postedDate": { "label": "Posted", "format": "text" },
-                    "jobUrl": { "label": "Job URL", "format": "link" },
-                    "companyUrl": { "label": "Company URL", "format": "link" },
-                    "jobId": { "label": "Job ID", "format": "text" },
-                    "scrapedAt": { "label": "Scraped At", "format": "date" }
+                    "companyLogo": {
+                        "label": "Logo",
+                        "format": "image"
+                    },
+                    "title": {
+                        "label": "Job Title",
+                        "format": "text"
+                    },
+                    "company": {
+                        "label": "Company",
+                        "format": "text"
+                    },
+                    "location": {
+                        "label": "Location",
+                        "format": "text"
+                    },
+                    "workplaceType": {
+                        "label": "Workplace",
+                        "format": "text"
+                    },
+                    "salary": {
+                        "label": "Salary",
+                        "format": "object"
+                    },
+                    "postedDate": {
+                        "label": "Posted",
+                        "format": "text"
+                    },
+                    "jobUrl": {
+                        "label": "Job URL",
+                        "format": "link"
+                    },
+                    "companyUrl": {
+                        "label": "Company URL",
+                        "format": "link"
+                    },
+                    "jobId": {
+                        "label": "Job ID",
+                        "format": "text"
+                    },
+                    "scrapedAt": {
+                        "label": "Scraped At",
+                        "format": "date"
+                    }
                 }
             }
         },
@@ -222,17 +353,50 @@
             "display": {
                 "component": "table",
                 "properties": {
-                    "title": { "label": "Job Title", "format": "text" },
-                    "company": { "label": "Company", "format": "text" },
-                    "seniorityLevel": { "label": "Seniority", "format": "text" },
-                    "employmentType": { "label": "Employment Type", "format": "text" },
-                    "jobFunction": { "label": "Job Function", "format": "text" },
-                    "industries": { "label": "Industries", "format": "text" },
-                    "skills": { "label": "Skills", "format": "array" },
-                    "applicants": { "label": "Applicants", "format": "text" },
-                    "easyApply": { "label": "Easy Apply", "format": "boolean" },
-                    "applyUrl": { "label": "Apply URL", "format": "link" },
-                    "description": { "label": "Description", "format": "text" }
+                    "title": {
+                        "label": "Job Title",
+                        "format": "text"
+                    },
+                    "company": {
+                        "label": "Company",
+                        "format": "text"
+                    },
+                    "seniorityLevel": {
+                        "label": "Seniority",
+                        "format": "text"
+                    },
+                    "employmentType": {
+                        "label": "Employment Type",
+                        "format": "text"
+                    },
+                    "jobFunction": {
+                        "label": "Job Function",
+                        "format": "text"
+                    },
+                    "industries": {
+                        "label": "Industries",
+                        "format": "text"
+                    },
+                    "skills": {
+                        "label": "Skills",
+                        "format": "array"
+                    },
+                    "applicants": {
+                        "label": "Applicants",
+                        "format": "text"
+                    },
+                    "easyApply": {
+                        "label": "Easy Apply",
+                        "format": "boolean"
+                    },
+                    "applyUrl": {
+                        "label": "Apply URL",
+                        "format": "link"
+                    },
+                    "description": {
+                        "label": "Description",
+                        "format": "text"
+                    }
                 }
             }
         }
