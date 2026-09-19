@@ -1,80 +1,25 @@
 {
-    "title": "LinkedIn Jobs Scraper Output",
-    "description": "Schema for the scraped job listings and company details.",
-    "type": "object",
-    "schemaVersion": 1,
+    "actorOutputSchemaVersion": 1,
+    "title": "Fast LinkedIn Jobs Scraper Output",
+    "description": "Scraped LinkedIn job listings and, optionally, company details.",
     "properties": {
-        "jobId": {
-            "title": "Job ID",
+        "jobs": {
             "type": "string",
-            "description": "The unique LinkedIn job ID."
+            "title": "Scraped jobs",
+            "description": "All scraped job listings from the default dataset, as clean JSON.",
+            "template": "{{links.apiDefaultDatasetUrl}}/items?clean=true&format=json"
         },
-        "title": {
-            "title": "Job Title",
+        "jobsCsv": {
             "type": "string",
-            "description": "The title of the job."
+            "title": "Scraped jobs (CSV)",
+            "description": "The same job listings exported as a CSV file.",
+            "template": "{{links.apiDefaultDatasetUrl}}/items?clean=true&format=csv"
         },
-        "company": {
-            "title": "Company Name",
+        "runOverview": {
             "type": "string",
-            "description": "The name of the company hiring."
-        },
-        "companyUrl": {
-            "title": "Company URL",
-            "type": "string",
-            "description": "URL to the company's LinkedIn page."
-        },
-        "companyLogo": {
-            "title": "Company Logo URL",
-            "type": "string",
-            "description": "URL to the company's logo."
-        },
-        "location": {
-            "title": "Location",
-            "type": "string",
-            "description": "The location of the job."
-        },
-        "locationParsed": {
-            "title": "Parsed Location",
-            "type": "object",
-            "description": "Parsed location data (city, state, country)."
-        },
-        "workplaceType": {
-            "title": "Workplace Type",
-            "type": "string",
-            "description": "Remote, On-site, or Hybrid."
-        },
-        "salary": {
-            "title": "Salary JSON",
-            "type": "object",
-            "description": "Parsed salary information including min, max, currency, and period."
-        },
-        "postedDate": {
-            "title": "Date Posted",
-            "type": "string",
-            "description": "When the job was posted."
-        },
-        "jobUrl": {
-            "title": "Job URL",
-            "type": "string",
-            "description": "The direct URL to the job posting."
-        },
-        "description": {
-            "title": "Description",
-            "type": "string",
-            "description": "Full job description text (if deep scrape is enabled)."
-        },
-        "skills": {
-            "title": "Skills",
-            "type": "array",
-            "items": { "type": "string" },
-            "description": "List of required skills (if deep scrape is enabled)."
-        },
-        "scrapedAt": {
-            "title": "Scraped At",
-            "type": "string",
-            "format": "date-time",
-            "description": "When the job was scraped."
+            "title": "Run overview",
+            "description": "Open this run in Apify Console to browse results and logs.",
+            "template": "{{links.publicRunUrl}}"
         }
     }
 }
