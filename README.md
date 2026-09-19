@@ -4,10 +4,6 @@
 
 Every design decision in this Actor was made to minimise time-to-results: no browser, no page rendering, and search pages fetched in parallel rather than one after another.
 
-| ⚡ Speed | 📦 Volume | 🔓 Login | 💵 Price |
-|---|---|---|---|
-| **~31 jobs/sec** | **1,000 per search** | **Not required** | **$1 / 1,000 results** |
-
 ---
 
 ## 🔍 What does this Actor do?
