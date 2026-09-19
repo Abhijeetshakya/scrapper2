@@ -2,7 +2,7 @@
     "title": "LinkedIn Jobs Scraper Output",
     "description": "Schema for the scraped job listings and company details.",
     "type": "object",
-    "schemaVersion": 1,
+    "actorSpecification": 1,
     "properties": {
         "jobId": {
             "title": "Job ID",
