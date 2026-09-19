@@ -1,0 +1,63 @@
+{
+    "title": "LinkedIn Jobs Scraper Input",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "searchQueries": {
+            "title": "Search Queries",
+            "type": "array",
+            "description": "List of job titles or keywords to search for.",
+            "editor": "stringList",
+            "default": ["Software Engineer"]
+        },
+        "location": {
+            "title": "Location",
+            "type": "string",
+            "description": "The target location (e.g., 'United States', 'London').",
+            "editor": "textfield",
+            "default": "United States"
+        },
+        "maxItems": {
+            "title": "Maximum Items",
+            "type": "integer",
+            "description": "Maximum number of jobs to scrape.",
+            "default": 100
+        },
+        "scrapeJobDetails": {
+            "title": "Deep Scrape: Job Details",
+            "type": "boolean",
+            "description": "Navigate into each job page to extract full descriptions, seniority, skills, etc. (uses more requests).",
+            "default": false
+        },
+        "scrapeCompanyDetails": {
+            "title": "Deep Scrape: Company Details",
+            "type": "boolean",
+            "description": "Navigate into company pages to extract industry and size (uses more requests).",
+            "default": false
+        },
+        "datePosted": {
+            "title": "Date Posted",
+            "type": "string",
+            "description": "Filter by date posted.",
+            "editor": "select",
+            "default": "any",
+            "enum": ["any", "past-24h", "past-week", "past-month"]
+        },
+        "remoteFilter": {
+            "title": "Remote Status",
+            "type": "string",
+            "description": "Filter by remote, on-site, or hybrid.",
+            "editor": "select",
+            "default": "any",
+            "enum": ["any", "remote", "on-site", "hybrid"]
+        },
+        "proxyConfiguration": {
+            "title": "Proxy Configuration",
+            "type": "object",
+            "description": "Residential proxies are highly recommended for large scrapes to prevent blocking.",
+            "editor": "proxy",
+            "default": { "useApifyProxy": true }
+        }
+    },
+    "required": ["searchQueries"]
+}
