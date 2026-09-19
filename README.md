@@ -1,6 +1,6 @@
 # ⚡ Fast LinkedIn Jobs Scraper
 
-### **Up to 1,000 LinkedIn jobs in ~30 seconds. No browser. No login. No cookies.**
+### **Up to 1,000 LinkedIn jobs in under a minute. No browser. No login. No cookies.**
 
 Most LinkedIn scrapers drive a headless browser — rendering pages, waiting on JavaScript, burning minutes of compute you pay for. This one talks to LinkedIn's public guest endpoints over **pure HTTP** and parses the HTML directly.
 
@@ -33,7 +33,7 @@ Not estimates — actual runs from the Apify console:
 | Page render | None needed | Full JS render per page |
 | Login / cookies | **Never required** | Usually required |
 | Memory | Runs fine on 1 GB | 4 GB+ typical |
-| 1,000 jobs | **~30 seconds** | Several minutes |
+| 1,000 jobs | **Under a minute** | Several minutes |
 
 Three design decisions do the heavy lifting:
 
