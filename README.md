@@ -19,7 +19,7 @@ You get job titles, companies, logos, locations, workplace type, posting dates, 
 - **Extremely fast.** No browser process, no JavaScript rendering, no page-load waits. Pure HTTP requests plus HTML parsing.
 - **No authentication.** Works entirely against LinkedIn's public guest endpoints. Nothing to configure, no cookies to refresh, no account to risk.
 - **Parallel pagination.** LinkedIn's result offsets are deterministic, so pages are fetched concurrently rather than discovered one at a time — the single biggest reason this Actor outpaces sequential scrapers.
-- **Cheap to run.** A 400-job run costs about $0.005 in platform usage; 1,000 jobs about $0.012.
+- **Predictable cost.** You pay per result, not per minute of compute — $1.00 per 1,000 jobs, with no charge for the requests, retries, or proxy traffic behind them.
 - **Resilient to blocking.** Session rotation, full-jitter retry backoff, and detection of LinkedIn's silent bot-challenge pages (served with HTTP 200, which status-code checks miss).
 - **Structured, not raw.** Locations and salaries are parsed into typed objects, not left as free text.
 - **Incremental runs.** `resumeFromPreviousRun` skips jobs already collected, so scheduled runs fetch only what is new.
@@ -156,17 +156,24 @@ Separate records with `"type": "COMPANY"` are added, containing `companySlug`, `
 
 ## Pricing
 
-This Actor uses Apify's **pay-per-usage** model. You are billed only for the platform resources your run consumes — compute units, proxy traffic, and storage. There is no separate subscription or per-result fee for the Actor itself.
+This Actor uses Apify's **pay-per-result** model: **from $1.00 per 1,000 results**, which works out to $0.001 per job.
 
-Typical observed costs:
+You are charged only for the results actually delivered to your dataset. The requests, retries, proxy traffic, and compute behind them are not billed to you — that cost sits with the Actor, not with your account.
 
-| Run | Requests | Cost |
+| You request | You receive | You pay |
 |---|---|---|
-| 400 jobs | 40 | ~$0.005 |
-| 1,000 jobs | 100 | ~$0.012 |
-| 400 jobs with `includeSalary` | 440 | ~$0.03 |
+| 100 jobs | 100 | $0.10 |
+| 500 jobs | 500 | $0.50 |
+| 1,000 jobs | ~991 (after de-duplication) | ~$0.99 |
 
-Because the Actor is HTTP-only, it consumes far fewer compute units than browser-based alternatives doing equivalent work. Enabling `includeSalary`, `scrapeJobDetails`, or `scrapeCompanyDetails` adds roughly one request per job or company and increases cost proportionally.
+**Enrichment is free of extra charge.** Turning on `includeSalary`, `scrapeJobDetails`, or `scrapeCompanyDetails` multiplies the requests made behind the scenes, but your price per result does not change. A job with a full description and salary costs exactly the same $0.001 as a bare listing.
+
+Two things worth knowing:
+
+- **You only pay for unique jobs.** De-duplication happens before results are written, so you are never billed twice for the same posting — a 1,000-job request that yields 991 unique jobs bills for 991, not 1,000.
+- **`scrapeCompanyDetails` adds records.** Company profiles are written as separate dataset items with `"type": "COMPANY"`, and each counts as a result. A 100-job run spanning 60 distinct companies produces 160 billable records. Leave the option off if you only want job rows.
+
+Apify free-plan credits apply, so you can trial the Actor before spending anything.
 
 ---
 
