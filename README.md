@@ -6,6 +6,23 @@ Every design decision in this Actor was made to minimise time-to-results: no bro
 
 ---
 
+## 📑 Table of Contents
+
+- [🔍 What does this Actor do?](#-what-does-this-actor-do)
+- [🚀 Why use this Actor?](#-why-use-this-actor)
+- [⚙️ How it works](#-how-it-works)
+- [📥 Input](#-input)
+- [📤 Output](#-output)
+- [💵 Pricing](#-pricing)
+- [🎯 Use cases](#-use-cases)
+- [❓ FAQ](#-faq)
+- [🏁 Getting started](#-getting-started)
+- [⚠️ Limitations and known issues](#-limitations-and-known-issues)
+- [💬 Support & feedback](#-support--feedback)
+- [⚖️ Legal and responsible use](#-legal-and-responsible-use)
+
+---
+
 ## 🔍 What does this Actor do?
 
 This Actor scrapes public job postings from LinkedIn and returns them as clean, structured JSON. It reads LinkedIn's guest-accessible job search endpoints directly over HTTP instead of driving a headless browser, which is why it completes in seconds what browser-based scrapers take minutes to do.
