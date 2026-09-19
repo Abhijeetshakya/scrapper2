@@ -1,64 +1,111 @@
-# ⚡ Fast LinkedIn Jobs Scraper
+# Fast LinkedIn Jobs Scraper
 
-### **Up to 1,000 LinkedIn jobs in under a minute. No browser. No login. No cookies.**
-
-Most LinkedIn scrapers drive a headless browser — rendering pages, waiting on JavaScript, burning minutes of compute you pay for. This one talks to LinkedIn's public guest endpoints over **pure HTTP** and parses the HTML directly.
-
-Same data. A fraction of the time. A fraction of the cost.
+Extract LinkedIn job listings at scale over plain HTTP — up to 1,000 jobs per search in under a minute, with no login, cookies, or browser required.
 
 ---
 
-## 🏁 Real measured performance
+## What does this Actor do?
 
-Not estimates — actual runs from the Apify console:
+This Actor scrapes public job postings from LinkedIn and returns them as clean, structured JSON. It reads LinkedIn's guest-accessible job search endpoints directly over HTTP instead of driving a headless browser, which is why it completes in seconds what browser-based scrapers take minutes to do.
 
-| Jobs returned | Requests | Duration | Failures |
-|---|---|---|---|
-| **991** | 100 | **32 s** | 0 |
-| **400** | 40 | **10 s** | 0 |
-| **400** | 40 | **13 s** | 0 |
-| **400** | 40 | **18 s** | 0 |
+You get job titles, companies, logos, locations, workplace type, posting dates, and direct links — plus optional full descriptions, required skills, and salary. No LinkedIn account, session cookie, or credential of any kind is needed.
 
-**~31 jobs per second.** A browser-based scraper is typically still launching Chromium at the 10-second mark.
-
-> Cost check: a 400-job run costs about **$0.005**. A 1,000-job run about **$0.012**.
+**Measured throughput: 991 jobs in 32 seconds across 100 requests, with zero failures.** That is roughly 31 jobs per second.
 
 ---
 
-## 🚀 Why it's this fast
+## Why use this Actor?
 
-| | This actor | Browser-based scrapers |
-|---|---|---|
-| Engine | Pure HTTP + Cheerio | Chromium / Playwright |
-| Page render | None needed | Full JS render per page |
-| Login / cookies | **Never required** | Usually required |
-| Memory | Runs fine on 1 GB | 4 GB+ typical |
-| 1,000 jobs | **Under a minute** | Several minutes |
-
-Three design decisions do the heavy lifting:
-
-- **Pre-queued pagination.** LinkedIn's page offsets are deterministic, so pages are fetched **in parallel** rather than discovered one-at-a-time. Serial discovery would bottleneck the entire crawl through a single request regardless of concurrency.
-- **Zero rendering.** No browser process, no JS execution, no screenshot buffers.
-- **One-pass parsing.** Each job card's DOM subtree is traversed once, not repeatedly.
+- **Extremely fast.** No browser process, no JavaScript rendering, no page-load waits. Pure HTTP requests plus HTML parsing.
+- **No authentication.** Works entirely against LinkedIn's public guest endpoints. Nothing to configure, no cookies to refresh, no account to risk.
+- **Parallel pagination.** LinkedIn's result offsets are deterministic, so pages are fetched concurrently rather than discovered one at a time — the single biggest reason this Actor outpaces sequential scrapers.
+- **Cheap to run.** A 400-job run costs about $0.005 in platform usage; 1,000 jobs about $0.012.
+- **Resilient to blocking.** Session rotation, full-jitter retry backoff, and detection of LinkedIn's silent bot-challenge pages (served with HTTP 200, which status-code checks miss).
+- **Structured, not raw.** Locations and salaries are parsed into typed objects, not left as free text.
+- **Incremental runs.** `resumeFromPreviousRun` skips jobs already collected, so scheduled runs fetch only what is new.
+- **Tested.** 163 automated tests cover the parsers and edge cases.
 
 ---
 
-## 🛡️ Built to be reliable, not just quick
+## How it works
 
-Speed is worthless if the run dies halfway. LinkedIn actively defends these endpoints, so this actor expects that:
+1. Builds LinkedIn guest search URLs from your keywords, location, and filters.
+2. Queues result pages in parallel waves using deterministic `start` offsets, so throughput is not bottlenecked by sequential page discovery.
+3. Parses each job card from the returned HTML with Cheerio.
+4. Optionally fetches each job's detail page for descriptions, skills, seniority, and salary.
+5. De-duplicates by job ID across queries and pages, then writes structured records to the dataset.
 
-- **Full-jitter retry backoff.** On a block, the session is retired and retried with a fresh session and proxy. Backoff samples the whole window rather than a fixed curve — otherwise every concurrent worker retries *in lockstep* and re-bursts a host that's already pushing back.
-- **Silent-block detection.** LinkedIn serves login walls and bot checkpoints with an **HTTP 200**. Status codes alone miss them, so response bodies are scanned for challenge markers and treated as failures.
-- **Adaptive throttling.** If the rolling block rate crosses 30%, concurrency automatically halves and an optional webhook fires.
-- **Resumable runs.** `resumeFromPreviousRun` skips everything already scraped, so scheduled runs only fetch what's new.
-- **Never loses a partial.** If a detail page fails, the listing data already collected is still saved, flagged `detailScrapeFailed`.
-- **163 automated tests** covering every parser and edge case.
+Blocked or rate-limited requests are retried with a fresh session and proxy using randomized backoff. If the rolling error rate exceeds 30%, concurrency is automatically reduced.
 
 ---
 
-## 📦 What you get
+## Input
 
-Every job returns clean, structured JSON:
+Only `searchQueries` is required. Everything else has a sensible default.
+
+### Search
+
+| Field | Type | Required | Description | Example |
+|---|---|---|---|---|
+| `searchQueries` | `array` | **Yes** | Job titles or keywords. Each is searched separately; results are de-duplicated across them. | `["Software Engineer", "Data Scientist"]` |
+| `location` | `string` | No | Target location. Default `"United States"`. | `"London"` |
+| `maxItems` | `integer` | No | Maximum jobs to return. Default `100`. LinkedIn serves up to 1,000 per query. | `1000` |
+| `startUrls` | `array` | No | Use LinkedIn search URLs directly instead of building them from filters. Default `[]`. | `["https://www.linkedin.com/jobs/search?keywords=devops"]` |
+
+### Filters
+
+| Field | Type | Required | Description | Example |
+|---|---|---|---|---|
+| `datePosted` | `string` | No | `any`, `past24hours`, `pastWeek`, `pastMonth`. Default `any`. | `"pastWeek"` |
+| `jobType` | `string` | No | `any`, `fullTime`, `partTime`, `contract`, `temporary`, `internship`. Default `any`. | `"fullTime"` |
+| `experienceLevel` | `string` | No | `any`, `internship`, `entryLevel`, `associate`, `midSenior`, `director`, `executive`. Default `any`. | `"midSenior"` |
+| `remoteFilter` | `string` | No | `any`, `onSite`, `remote`, `hybrid`. Default `any`. | `"remote"` |
+
+### Optional enrichment
+
+Each of these adds requests and increases runtime. All are `false` by default.
+
+| Field | Type | Required | Description | Example |
+|---|---|---|---|---|
+| `includeSalary` | `boolean` | No | Fetch pay for each job. Adds one request per job. Jobs without disclosed pay are still returned with `salary: null`. | `true` |
+| `scrapeJobDetails` | `boolean` | No | Fetch full descriptions, skills, seniority, employment type, and apply links. Adds one request per job. | `true` |
+| `scrapeCompanyDetails` | `boolean` | No | Fetch company industry, size, and website. Adds one request per unique company. | `true` |
+
+### Performance and output control
+
+| Field | Type | Required | Description | Example |
+|---|---|---|---|---|
+| `proxyConfiguration` | `object` | No | Apify Proxy settings. Default `{"useApifyProxy": true}`. Residential proxies recommended at volume. | `{"useApifyProxy": true, "apifyProxyGroups": ["RESIDENTIAL"]}` |
+| `maxConcurrency` | `integer` | No | Requests in flight. Default `10`. | `5` |
+| `requestsPerMinuteMultiplier` | `integer` | No | Rate cap = `maxConcurrency × this`. Default `30`. | `60` |
+| `maxRequestRetries` | `integer` | No | Retries before a request is abandoned. Default `5`. | `8` |
+| `outputFields` | `array` | No | Restrict records to these fields. Default `[]` (all fields). `jobId` is always kept. | `["title", "company", "jobUrl"]` |
+| `resumeFromPreviousRun` | `boolean` | No | Skip jobs collected in earlier runs. Default `false`. | `true` |
+| `webhookUrl` | `string` | No | URL to POST run events to (`HIGH_ERROR_RATE`, `COMPLETED`). | `"https://example.com/hook"` |
+| `notifyOnCompletion` | `boolean` | No | Send a webhook when the run finishes. Default `false`. | `true` |
+| `paginationBatchSize` | `integer` | No | Result pages queued per parallel wave. Default `8`. Higher fetches more in parallel but over-fetches on short result sets. | `12` |
+| `requestDelayMinMs` | `integer` | No | Artificial minimum delay before each request, in ms. Default `0`. Leave at `0` — a delay here holds a concurrency slot open while it waits. | `0` |
+| `requestDelayMaxMs` | `integer` | No | Upper bound of the artificial delay. Default `0` (disabled). Only useful for targets needing jittered spacing. | `0` |
+
+### Example input
+
+```json
+{
+  "searchQueries": ["Software Engineer", "Backend Engineer"],
+  "location": "United States",
+  "maxItems": 1000,
+  "datePosted": "pastWeek",
+  "jobType": "fullTime",
+  "remoteFilter": "remote",
+  "proxyConfiguration": { "useApifyProxy": true }
+}
+```
+
+---
+
+## Output
+
+Each job becomes one dataset item:
 
 ```json
 {
@@ -66,126 +113,179 @@ Every job returns clean, structured JSON:
   "title": "Senior Software Engineer - Java",
   "company": "The Walt Disney Company",
   "companyUrl": "https://www.linkedin.com/company/the-walt-disney-company",
-  "companyLogo": "https://media.licdn.com/dms/image/...",
+  "companyLogo": "https://media.licdn.com/dms/image/v2/D4E0BAQH.../company-logo_100_100.png",
   "location": "New York, NY",
-  "locationParsed": { "city": "New York", "state": "NY", "country": null, "raw": "New York, NY" },
+  "locationParsed": {
+    "city": "New York",
+    "state": "NY",
+    "country": null,
+    "raw": "New York, NY"
+  },
   "workplaceType": "On-site",
   "salary": null,
+  "salarySource": null,
   "postedDate": "2026-09-16",
   "jobUrl": "https://www.linkedin.com/jobs/view/4467951950",
   "scrapedAt": "2026-09-19T13:16:15.000Z"
 }
 ```
 
-Enable **Deep Scrape: Job Details** and each record also carries `description`, `descriptionHtml`, `seniorityLevel`, `employmentType`, `jobFunction`, `industries`, `skills`, `applicants`, `easyApply`, and `applyUrl`.
+### Key fields
 
-Company logos render as **actual images** in the Output tab — not raw URLs.
-
----
-
-## ⚙️ Quick start
-
-```json
-{
-  "searchQueries": ["Software Engineer", "Data Scientist"],
-  "location": "United States",
-  "maxItems": 1000,
-  "datePosted": "pastWeek",
-  "remoteFilter": "remote"
-}
-```
-
-That's it. No credentials, no cookie extraction, no session setup.
-
----
-
-## 🎛️ Input reference
-
-### Search
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `searchQueries` | `string[]` | `["Software Engineer"]` | Keywords to search. Each runs separately; results are de-duplicated across them. |
-| `location` | `string` | `"United States"` | e.g. `"London"`, `"Berlin, Germany"` |
-| `maxItems` | `integer` | `100` | Jobs to scrape. **LinkedIn serves up to 1,000 per query.** |
-| `startUrls` | `array` | `[]` | Supply LinkedIn search URLs directly instead of building them from filters. |
-
-### Filters
-
-| Parameter | Options |
+| Field | Description |
 |---|---|
-| `datePosted` | `any`, `past24hours`, `pastWeek`, `pastMonth` |
-| `jobType` | `any`, `fullTime`, `partTime`, `contract`, `temporary`, `internship` |
-| `experienceLevel` | `any`, `internship`, `entryLevel`, `associate`, `midSenior`, `director`, `executive` |
-| `remoteFilter` | `any`, `onSite`, `remote`, `hybrid` |
+| `jobId` | LinkedIn's unique posting ID. Stable, and used for de-duplication. |
+| `title` / `company` | Job title and hiring company. |
+| `companyLogo` | Direct image URL. Renders as an image in the Output tab. |
+| `location` / `locationParsed` | Raw location text, plus a parsed `{city, state, country, raw}` object. |
+| `workplaceType` | `Remote`, `Hybrid`, or `On-site`. |
+| `salary` | Parsed object `{min, max, currency, period, raw}`, or `null`. Requires `includeSalary`. |
+| `salarySource` | Where pay came from: `compensation` (LinkedIn's structured block) or `description` (recovered from the posting text). Useful for judging confidence. |
+| `postedDate` | Publication date, ISO format where LinkedIn provides it. |
+| `jobUrl` | Canonical posting URL with tracking parameters stripped. |
 
-### Optional enrichment — *these trade speed for depth*
+### With `scrapeJobDetails` enabled
 
-| Parameter | Default | Cost |
+Records additionally include `description`, `descriptionHtml`, `seniorityLevel`, `employmentType`, `jobFunction`, `industries`, `skills`, `applicants`, `easyApply`, and `applyUrl`.
+
+### With `scrapeCompanyDetails` enabled
+
+Separate records with `"type": "COMPANY"` are added, containing `companySlug`, `name`, `industry`, `companySize`, `website`, and `description`.
+
+---
+
+## Pricing
+
+This Actor uses Apify's **pay-per-usage** model. You are billed only for the platform resources your run consumes — compute units, proxy traffic, and storage. There is no separate subscription or per-result fee for the Actor itself.
+
+Typical observed costs:
+
+| Run | Requests | Cost |
 |---|---|---|
-| `includeSalary` | `false` | ⚠️ One extra request **per job**. Keep off for full speed. |
-| `scrapeJobDetails` | `false` | ⚠️ One extra request per job. Adds descriptions, skills, seniority. |
-| `scrapeCompanyDetails` | `false` | One extra request per unique company. Adds industry, size, website. |
+| 400 jobs | 40 | ~$0.005 |
+| 1,000 jobs | 100 | ~$0.012 |
+| 400 jobs with `includeSalary` | 440 | ~$0.03 |
 
-### Performance & output
-
-| Parameter | Default | Description |
-|---|---|---|
-| `maxConcurrency` | `10` | Requests in flight. Lower it if blocks rise. |
-| `requestsPerMinuteMultiplier` | `30` | Rate cap = `maxConcurrency × this`. |
-| `maxRequestRetries` | `5` | Retries before a request is abandoned. |
-| `proxyConfiguration` | Apify Proxy | **Residential proxies strongly recommended at volume.** |
-| `outputFields` | `[]` (all) | Trim records to just the fields you need. |
-| `resumeFromPreviousRun` | `false` | Skip anything scraped in a previous run. |
-| `webhookUrl` / `notifyOnCompletion` | — | POST run events (`HIGH_ERROR_RATE`, `COMPLETED`). |
+Because the Actor is HTTP-only, it consumes far fewer compute units than browser-based alternatives doing equivalent work. Enabling `includeSalary`, `scrapeJobDetails`, or `scrapeCompanyDetails` adds roughly one request per job or company and increases cost proportionally.
 
 ---
 
-## 💰 A note on salary — read this before enabling
+## Use cases
 
-**LinkedIn does not put salary on search result cards.** Nothing can change that. Getting pay means opening every job individually — roughly **10× the requests**, turning a 30-second run into several minutes.
+**Job board aggregation.** Refresh thousands of listings on a schedule. Pair `resumeFromPreviousRun` with a daily trigger to fetch only newly posted roles instead of re-scraping the full set.
 
-There's a second reality worth knowing: **only about half of postings disclose pay at all**, and of those, most bury it in the description body rather than a structured field. This actor reads both, and tells you which via `salarySource` (`compensation` or `description`).
+**Recruitment and talent sourcing.** Track which companies are hiring for a given role in a given market. Filter by `experienceLevel` and `remoteFilter` to find competitors staffing specific seniority bands.
 
-With `includeSalary` **off**, every job is still returned — `salary` is simply `null`. Nothing is hidden or filtered out.
+**Labor market research.** Collect postings across roles and regions to analyze demand, remote-work ratios, and — with `includeSalary` — compensation bands by title and location.
 
-**Recommendation:** leave it off for bulk collection. Turn it on for targeted searches where pay is the point.
-
----
-
-## 🎯 Built for
-
-- **Job boards & aggregators** — refresh thousands of listings in seconds
-- **Recruiting & sourcing** — track who's hiring, where, and for what
-- **Market research** — salary bands, skill demand, remote-work trends
-- **ATS / CRM pipelines** — clean JSON straight into your stack
-- **Lead generation** — find companies actively growing a team
+**Sales lead generation.** Companies posting engineering roles are companies growing engineering teams. Use `scrapeCompanyDetails` to enrich each hit with industry and headcount.
 
 ---
 
-## ❓ FAQ
+## FAQ
 
-**Do I need a LinkedIn account or cookies?**
-No. It uses LinkedIn's public guest endpoints. Nothing to configure.
+**Do I need a LinkedIn account, cookies, or session token?**
+No. The Actor only reads LinkedIn's publicly accessible guest job endpoints. There is nothing to authenticate.
 
-**Why did I get 991 instead of 1,000?**
-LinkedIn's ceiling is 1,000 result slots per search, and duplicates are removed. You get ~99% unique jobs rather than a padded count with repeats. Use multiple `searchQueries` or locations to go beyond 1,000.
+**Does it work with proxies?**
+Yes, and proxies are enabled by default via Apify Proxy. LinkedIn rate-limits aggressively, so **residential proxies are strongly recommended** for large runs. Configure them through `proxyConfiguration`.
 
-**Can I get more than 1,000 jobs?**
-Not from a single query — that's LinkedIn's hard limit. Split across several queries, locations, or date windows.
+**What are the rate limits, and why do some requests fail?**
+LinkedIn throttles guest traffic and sometimes serves bot-challenge pages with an HTTP 200 status. The Actor detects these, retires the session, and retries with a new session and proxy using randomized backoff. A modest failure rate on large runs is normal — the run still completes. Lower `maxConcurrency` or use residential proxies to reduce it.
+
+**Can I run this on a schedule?**
+Yes. Use Apify Schedules. Combine with `resumeFromPreviousRun: true` so each run returns only jobs not seen previously.
+
+**Why did I get 991 results instead of 1,000?**
+LinkedIn caps any single search at 1,000 result slots, and duplicate postings that appear at more than one offset are removed. You receive unique jobs rather than a padded count. To exceed 1,000, split the work across multiple `searchQueries`, locations, or date windows.
 
 **Why is `salary` null?**
-Either `includeSalary` is off (default), or the employer didn't disclose pay. See the salary section above.
-
-**Some requests failed. Is it broken?**
-No. LinkedIn rate-limits aggressively; the actor retries with fresh sessions and backoff. A modest failure rate is normal and the run still completes. Use residential proxies to reduce it.
+Either `includeSalary` is off (the default), or the employer did not disclose pay. LinkedIn does not include salary on search result cards at all, so retrieving it requires opening each posting individually. Roughly half of postings disclose pay.
 
 ---
 
-## ⚖️ Legal
+## Getting started
 
-This actor collects **publicly accessible** job postings that require no login to view. You are responsible for ensuring your use complies with applicable laws, including data-protection regulations, and with LinkedIn's terms. Intended for lawful research, analysis, and job-market intelligence.
+### 1. Run in Apify Console
+
+1. Open the Actor in Apify Console and click **Try for free**.
+2. Enter your keywords under **Search Queries** and set a **Location**.
+3. Set **Maximum Items** (start with `100` to preview).
+4. Click **Start** and watch results populate the **Output** tab.
+5. Export as JSON, CSV, or Excel from the **Export** button.
+
+### 2. Run via API
+
+```bash
+curl -X POST "https://api.apify.com/v2/acts/unknownbrain~fast-linkedin-jobs-scraper/runs?token=YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "searchQueries": ["Software Engineer"],
+    "location": "United States",
+    "maxItems": 500,
+    "remoteFilter": "remote"
+  }'
+```
+
+To run and receive the dataset in one synchronous call:
+
+```bash
+curl -X POST "https://api.apify.com/v2/acts/unknownbrain~fast-linkedin-jobs-scraper/run-sync-get-dataset-items?token=YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "searchQueries": ["Data Scientist"], "maxItems": 100 }'
+```
+
+### 3. Run via Apify CLI
+
+```bash
+npm install -g apify-cli
+apify login
+apify call unknownbrain/fast-linkedin-jobs-scraper \
+  --input '{"searchQueries":["Product Manager"],"location":"Berlin","maxItems":200}'
+```
+
+### 4. Use the JavaScript client
+
+```javascript
+import { ApifyClient } from 'apify-client';
+
+const client = new ApifyClient({ token: 'YOUR_API_TOKEN' });
+
+const run = await client.actor('unknownbrain/fast-linkedin-jobs-scraper').call({
+    searchQueries: ['Software Engineer'],
+    location: 'United States',
+    maxItems: 1000,
+    datePosted: 'pastWeek',
+});
+
+const { items } = await client.dataset(run.defaultDatasetId).listItems();
+console.log(`Scraped ${items.length} jobs`);
+```
 
 ---
 
-### ⚡ Fast. Reliable. No login. Try a run — it'll finish before you've read this far.
+## Limitations and known issues
+
+- **1,000 results per search.** This is LinkedIn's own ceiling, not an Actor limit. Split across queries, locations, or date ranges to collect more.
+- **Salary availability.** Roughly half of postings disclose pay, and most that do place it in the description body rather than a structured field. The Actor reads both and reports which via `salarySource`.
+- **Enrichment costs speed.** `includeSalary` and `scrapeJobDetails` each add one request per job, turning a sub-minute run into several minutes. Leave them off for bulk collection.
+- **Rate limiting.** LinkedIn actively defends these endpoints. Some requests fail on large runs even with retries; residential proxies materially improve success rates.
+- **Slight under-count is expected.** De-duplication means a 1,000-item request typically returns 985–1,000 unique jobs.
+- **Relative dates.** For some postings LinkedIn provides only relative text ("2 weeks ago") rather than an exact date.
+
+---
+
+## Support & feedback
+
+- **Bug reports and feature requests:** open an issue on the Actor's **Issues** tab in Apify Console. Please include your run ID and input JSON — both make problems far faster to reproduce.
+- **Questions:** use the Issues tab or contact the developer through the Apify Store page.
+
+Feedback on which fields or filters you need most is genuinely useful and shapes what gets added next.
+
+---
+
+## Legal and responsible use
+
+This Actor collects **publicly available** job postings that require no login to view. It does not access private profiles, personal data behind authentication, or any content requiring credentials.
+
+You are responsible for ensuring your use complies with applicable laws — including data protection regulations such as GDPR and CCPA — and with LinkedIn's terms of service. Intended for lawful market research, recruitment analytics, and job aggregation.
