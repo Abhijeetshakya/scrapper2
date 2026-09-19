@@ -209,7 +209,7 @@ assert(!isChallengePage(''), 'handles empty body');
 
 // ─── Test: filterOutputFields ─────────────────────────────────────────
 console.log('\n🧪 Testing filterOutputFields()');
-const fullRecord = { jobId: '123', title: 'Engineer', company: 'Acme', location: 'SF', salary: '$100K' };
+const fullRecord = { jobId: '123', title: 'Engineer', company: 'Acme', location: 'SF', salary: { min: 100000, max: 100000, currency: 'USD', period: 'yearly', raw: '$100K' } };
 const filtered1 = filterOutputFields(fullRecord, ['title', 'company']);
 assertEqual(Object.keys(filtered1).sort().join(','), 'company,jobId,title', 'keeps only selected fields plus jobId');
 assert(!('location' in filtered1), 'excludes unselected field');
@@ -262,7 +262,13 @@ assert(job1 !== null, 'parses first job card');
 assertEqual(job1.title, 'Senior Software Engineer', 'extracts title');
 assertEqual(job1.company, 'Acme Corp', 'extracts company');
 assertEqual(job1.location, 'San Francisco, CA', 'extracts location');
-assertEqual(job1.salary, '$150,000 - $200,000', 'extracts salary');
+// salary is now a parsed JSON object, not a raw string
+assert(job1.salary !== null, 'salary is not null when present');
+assertEqual(job1.salary.min, 150000, 'salary JSON has correct min');
+assertEqual(job1.salary.max, 200000, 'salary JSON has correct max');
+assertEqual(job1.salary.currency, 'USD', 'salary JSON has correct currency');
+assertEqual(job1.salary.period, 'yearly', 'salary JSON has correct period');
+assertEqual(job1.salary.raw, '$150,000 - $200,000', 'salary JSON preserves raw text');
 assertEqual(job1.postedDate, '2024-01-15', 'extracts datetime attribute');
 assertEqual(job1.jobId, '3912345678', 'extracts job ID from URL');
 assert(job1.jobUrl.includes('/jobs/view/3912345678'), 'has clean job URL');
@@ -270,7 +276,10 @@ assert(!job1.jobUrl.includes('trk='), 'strips tracking params');
 assert(job1.scrapedAt, 'includes scrapedAt timestamp');
 assertEqual(job1.workplaceType, 'On-site', 'derives on-site workplace type');
 assertEqual(job1.companyUrl, 'https://www.linkedin.com/company/acme-corp', 'extracts company URL at listing level');
-assertEqual(job1.isReposted, false, 'not flagged as reposted');
+// Verify removed columns are not present
+assert(!('companyId' in job1), 'companyId column is removed');
+assert(!('isReposted' in job1), 'isReposted column is removed');
+assert(!('salaryParsed' in job1), 'salaryParsed column is removed');
 
 const job2 = parseJobListing($search, listItems[1]);
 assert(job2 !== null, 'parses second job card');

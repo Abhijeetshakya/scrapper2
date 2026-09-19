@@ -229,7 +229,7 @@ export function isChallengePage(html) {
  */
 export function filterOutputFields(record, fields) {
     if (!record || !Array.isArray(fields) || fields.length === 0) return record;
-    const alwaysKeep = new Set(['jobId', 'companyId', 'type', ...fields]);
+    const alwaysKeep = new Set(['jobId', 'type', ...fields]);
     return Object.fromEntries(
         Object.entries(record).filter(([key]) => alwaysKeep.has(key))
     );

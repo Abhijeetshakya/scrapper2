@@ -1,4 +1,4 @@
-import { cleanText, extractJobId, detectWorkplaceType, extractCompanyId, parseSalary, parseLocation, canonicalizeUrl } from './utils.js';
+import { cleanText, extractJobId, detectWorkplaceType, parseSalary, parseLocation, canonicalizeUrl } from './utils.js';
 import { LINKEDIN_BASE } from './constants.js';
 
 /**
@@ -93,46 +93,38 @@ export function parseJobListing($, element) {
         '.job-search-card__salary-info, .base-search-card__metadata .salary-info, ' +
         '.job-search-card__salary, [class*="salary" i]'
     );
-    let salary = cleanText($salary.text());
+    let salaryRaw = cleanText($salary.text());
 
-    if (!salary) {
+    if (!salaryRaw) {
         const salaryMatch = metadataText.match(
             /[$€£₹¥]\s?[\d,.]+(?:\.\d+)?\s?[kK]?(?:\s*-\s*[$€£₹¥]?\s?[\d,.]+(?:\.\d+)?\s?[kK]?)?(?:\s*\/\s*(?:yr|hr|mo|wk|year|hour|month|week))?/
         );
-        if (salaryMatch) salary = cleanText(salaryMatch[0]);
+        if (salaryMatch) salaryRaw = cleanText(salaryMatch[0]);
     }
 
     // ─── Workplace Type (Remote / Hybrid / On-site) ───────────────
     const workplaceType = detectWorkplaceType(location);
 
-    // ─── Reposted flag ─────────────────────────────────────────────
-    // LinkedIn sometimes marks a listing as reposted in the metadata block.
-    // Reuses the hoisted metadataText above rather than re-traversing.
-    const isReposted = metadataText.toLowerCase().includes('repost');
-
     // ─── Company Logo ────────────────────────────────────────────
+    // Wrap the logo URL in an <img> tag so Apify's table view renders
+    // it as an actual image instead of a raw URL string.
     const $logo = $target.find('img.artdeco-entity-image, .search-entity-media img, img[data-delayed-url]');
-    const companyLogo = $logo.attr('data-delayed-url') || $logo.attr('src') || null;
-
-    // ─── Company ID ──────────────────────────────────────────────
-    const companyId = extractCompanyId(companyUrl)
-        || extractCompanyId($target.find('[data-entity-urn]').attr('data-entity-urn'))
-        || null;
+    const logoUrl = $logo.attr('data-delayed-url') || $logo.attr('src') || null;
+    const companyLogo = logoUrl
+        ? `<img src="${logoUrl}" alt="${company || 'Company'} Logo" width="48" height="48">`
+        : null;
 
     return {
         jobId,
         title,
         company,
         companyUrl,
-        companyId,
         companyLogo,
         location,
         locationParsed: parseLocation(location),
         workplaceType,
-        salary: salary || null,
-        salaryParsed: salary ? parseSalary(salary) : null,
+        salary: salaryRaw ? parseSalary(salaryRaw) : null,
         postedDate: postedDate || null,
-        isReposted,
         jobUrl: jobUrl || null,
         scrapedAt: new Date().toISOString(),
     };
@@ -196,14 +188,17 @@ export function parseJobDetails($, jobData) {
     );
 
     // ─── Company Logo (fallback to detail page if listing had none) ─
-    const $detailLogo = $('.top-card-layout__entity-image, img.top-card-layout__entity-image, .artdeco-entity-image');
-    const companyLogo = jobData.companyLogo || $detailLogo.attr('data-delayed-url') || $detailLogo.attr('src') || null;
-
-    // ─── Company ID (fallback to detail page if listing had none) ───
-    const companyId = jobData.companyId
-        || extractCompanyId($('[data-entity-urn]').first().attr('data-entity-urn'))
-        || extractCompanyId(companyUrl)
-        || null;
+    // If the listing already has an <img> tag we keep it; otherwise build one
+    // from the detail page's logo URL.
+    let companyLogo = jobData.companyLogo || null;
+    if (!companyLogo) {
+        const $detailLogo = $('.top-card-layout__entity-image, img.top-card-layout__entity-image, .artdeco-entity-image');
+        const detailLogoUrl = $detailLogo.attr('data-delayed-url') || $detailLogo.attr('src') || null;
+        if (detailLogoUrl) {
+            const logoCompany = jobData.company || detailCompany || 'Company';
+            companyLogo = `<img src="${detailLogoUrl}" alt="${logoCompany} Logo" width="48" height="48">`;
+        }
+    }
 
     // ─── Required Skills / Qualifications ───────────────────────────
     // LinkedIn surfaces these as a distinct list, separate from the free-text description
@@ -233,7 +228,6 @@ export function parseJobDetails($, jobData) {
         title: jobData.title || detailTitle,
         company: jobData.company || detailCompany,
         companyLogo,
-        companyId,
         description: description || null,
         descriptionHtml: descriptionHtml || null,
         seniorityLevel: criteria.seniorityLevel || null,
