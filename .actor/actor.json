@@ -1,0 +1,14 @@
+{
+    "actorSpecification": 1,
+    "name": "fast-linkedin-job-scrapper",
+    "title": "Fast LinkedIn Jobs Scraper",
+    "description": "Extract LinkedIn job postings, company details, salaries, and requirements blazingly fast.",
+    "version": "1.0",
+    "meta": {
+        "templateId": "project-empty"
+    },
+    "input": "./input_schema.json",
+    "storages": {
+        "dataset": "./dataset_schema.json"
+    }
+}
