@@ -164,8 +164,16 @@ export const CHALLENGE_MARKERS = [
  * in the crawler should hardcode a number that appears in this object.
  */
 export const DEFAULTS = {
-    /** Jobs per LinkedIn guest search page. Fixed by their API, not a preference. */
-    JOBS_PER_PAGE: 25,
+    /**
+     * Jobs per LinkedIn guest search page. Fixed by their API, not a preference.
+     *
+     * This is 10, not 25. `start` is a true row offset, so a step of 25 against
+     * 10-row pages skipped 15 jobs out of every 25 - start=10 shares no results
+     * with start=0 or start=25 - and capped a run at 40 pages x 10 = exactly 400
+     * results, because offsets 0,25,...,975 exhaust MAX_SEARCH_OFFSET first.
+     * Stepping by 10 walks 0,10,...,990 and reaches the real 1000 ceiling.
+     */
+    JOBS_PER_PAGE: 10,
     /** LinkedIn stops serving guest results past this offset. */
     MAX_SEARCH_OFFSET: 1000,
 

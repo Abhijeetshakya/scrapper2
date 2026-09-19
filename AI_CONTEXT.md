@@ -97,12 +97,27 @@ Measured on 10 live fragments (avg 69 KB):
 
 Salary parsing is not the bottleneck and never will be — the request count is. **Apify allocates 1 CPU core per 4 GB of memory**, so a 1 GB run gets ~0.25 core, and Crawlee's autoscaler then throttles concurrency under CPU pressure. For salary runs, raise the actor's memory before touching anything in the code.
 
-## 6. Performance & Failure Insights
+## 6. Pagination — the 400-result cap
+
+Every run returned exactly 400 results. That was not LinkedIn's limit, it was a wrong constant.
+
+`JOBS_PER_PAGE` was **25**, but the guest search endpoint serves **10** rows per page. Verified against the live endpoint: `start=0`, `start=10`, `start=20` and `start=25` each return 10 jobs, and `start=10` shares **zero** job IDs with either `start=0` or `start=25`. So `start` is a true row offset and the page size is 10.
+
+Two consequences of the mismatch:
+
+1. **15 jobs of every 25 were silently skipped.** Stepping `0, 25, 50…` never requested rows 10-24, 35-49, and so on.
+2. **Runs capped at exactly 400.** Offsets `0,25,…,975` exhaust `MAX_SEARCH_OFFSET` (1000) after 40 pages, and 40 pages x 10 rows = 400.
+
+With `JOBS_PER_PAGE: 10`, pagination walks `0,10,…,990` — 100 pages, **1000 results**, LinkedIn's real ceiling. Confirmed `start=990` serves data and `start=1000` returns nothing.
+
+**This costs no speed.** 400 results needs 40 requests either way; the step size only changes which rows are fetched and how far pagination can reach. Requests scale as `maxItems / 10`.
+
+## 7. Performance & Failure Insights
 - **~25% failed requests is normal.** LinkedIn returns HTTP 429 or serves bot-challenge/checkpoint pages, which the actor detects. At concurrency 10 without residential proxies this rate is expected; retries and exponential backoff absorb it.
 - **300 results in 8 seconds** (37.5 jobs/sec) is extremely fast. Browser-based scrapers typically need 60–120+ seconds for the same work. The runtime is bound by network latency (200–500ms per LinkedIn request) and retry backoff, not CPU parsing.
 - Local CPU benchmarks on the parsing logic reached **607 jobs/second** with pre-queued pagination and concurrency 10.
 
-## 7. Key Architecture Notes for Other AIs
+## 8. Key Architecture Notes for Other AIs
 - Code on `main` is up to date.
 - **Pagination is pre-queued in waves**, not discovered serially. LinkedIn's `start` offsets are deterministic (0, 25, 50…), so page N+1 never needs page N parsed first. Serial discovery would force the whole search phase through one request at a time regardless of `maxConcurrency`. Only the last page of a wave queues the next, so waves never overlap.
 - **Retry backoff uses full jitter** (`Math.random() * ceiling`), not exponential-plus-small-jitter. With N concurrent workers, near-deterministic backoff makes blocked requests retry in lockstep and burst a host that is already pushing back.
@@ -110,4 +125,4 @@ Salary parsing is not the bottleneck and never will be — the request count is.
 - `salary` is a **JSON object or `null`**, never a raw string.
 - `companyId`, `isReposted`, and `salaryParsed` do not exist on job records.
 - `extractCompanyId()` is still used for company records; `extractCompanyKey()` is what deduplication actually runs on.
-- Test suite: **161/161 passing** (`npm test`).
+- Test suite: **163/163 passing** (`npm test`).

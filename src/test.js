@@ -463,14 +463,22 @@ console.log('\n🧪 Testing buildPaginationUrls()');
     const wave = buildPaginationUrls(base, 0, 8, 200);
     assert(wave.length === 8, 'queues a full wave when enough items remain');
     assert(new URL(wave[0]).searchParams.get('start') === '0', 'first offset is 0');
-    assert(new URL(wave[1]).searchParams.get('start') === '25', 'offsets step by 25');
-    assert(new URL(wave[7]).searchParams.get('start') === '175', 'last offset of wave is 175');
+    // LinkedIn's guest search serves 10 rows per page and `start` is a true row
+    // offset, so the step must be 10. A step of 25 skipped 15 jobs per page and
+    // exhausted the 1000 ceiling after only 40 pages, capping runs at 400.
+    assert(new URL(wave[1]).searchParams.get('start') === '10', 'offsets step by 10');
+    assert(new URL(wave[7]).searchParams.get('start') === '70', 'last offset of wave is 70');
 
     const small = buildPaginationUrls(base, 0, 8, 30);
-    assert(small.length === 2, 'wave is capped by remaining items, not batch size');
+    assert(small.length === 3, 'wave is capped by remaining items, not batch size');
 
-    const capped = buildPaginationUrls(base, 975, 8, 500);
+    const capped = buildPaginationUrls(base, 990, 8, 500);
     assert(capped.length === 1, 'stops at the 1000-result ceiling');
+
+    // The reachable ceiling: 0,10,...,990 is 100 pages of 10 = 1000 results.
+    const full = buildPaginationUrls(base, 0, 200, 5000);
+    assert(full.length === 100, 'can reach 100 pages, i.e. LinkedIn\'s full 1000 results');
+    assert(new URL(full[99]).searchParams.get('start') === '990', 'last reachable offset is 990');
 
     const none = buildPaginationUrls(base, 1000, 8, 500);
     assert(none.length === 0, 'returns nothing past the ceiling');
