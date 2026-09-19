@@ -127,11 +127,12 @@
                 "Hybrid"
             ]
         },
-        "requireSalary": {
-            "title": "Only Jobs With Salary",
+        "includeSalary": {
+            "title": "Show Salary",
             "type": "boolean",
-            "description": "Return only jobs that disclose pay. Salary is not present on LinkedIn search cards, so this automatically enables Deep Scrape: Job Details and costs one request per job. Roughly half of postings disclose pay, so reaching Maximum Items means scanning about twice as many jobs.",
-            "default": false
+            "description": "⚠️ SLOWER: leave this off to keep the scraper at full speed. LinkedIn does not put pay on search result cards, so turning this on means opening every job individually — roughly 10x the requests, and a run that normally takes seconds can take minutes. All jobs are still returned either way; with this off, salary is simply null. About half of postings disclose pay, so the rest stay null even with this on.",
+            "default": false,
+            "groupCaption": "Salary"
         },
         "scrapeJobDetails": {
             "title": "Deep Scrape: Job Details",

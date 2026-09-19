@@ -76,11 +76,26 @@ So pay is disclosed on about half of postings, but **only a fifth of those use t
 1. **Never read salary from the full `/jobs/view/` page.** It carries `main-job-card__salary-info` and `aside-job-card__salary-info` for unrelated "similar jobs" in the sidebar — scraping those attaches another company's pay to the record. The `/jobs-guest/jobs/api/jobPosting/` fragment the actor uses has none of these and is safe.
 2. **Description prose is full of currency figures that are not pay** — funds protected, funding rounds, transaction values. `extractSalaryFromText()` requires a pay-context keyword within 220 chars before the figure (or an explicit `/yr`-style marker) and range-checks the magnitude against the pay period via `isPlausibleSalary()`. A real posting reading "protected over $250B+ in funds" correctly yields no salary. Ranges are always resolved before single figures, otherwise a lone "$157,400 per year" outscores the "$107,800 - $157,400" range it is the upper half of and silently collapses it.
 
-### `requireSalary` input
-LinkedIn's own salary filter (`f_SB2`) is **ignored by the guest endpoint** — verified by diffing result sets with and without it, which were identical. So the filter has to be client-side, after the detail page is fetched. Consequences:
+### `includeSalary` input — and why it is off by default
+LinkedIn's own salary filter (`f_SB2`) is **ignored by the guest endpoint** — verified by diffing result sets with and without it, which were identical. Pay exists only on the job detail page. So showing salary costs **one extra request per job**: 400 jobs goes from 40 requests to 440, which is the entire reason a salary run is slower. There is no cheaper path.
 
-- It forces `scrapeJobDetails` on, since salary is never on a search card.
-- Reaching `maxItems` requires queuing more than `maxItems`. `queueCeiling()` in `main.js` adapts to the observed disclosure rate, floors it at 15%, and hard-caps the fan-out at 6x so a query where nobody discloses still terminates.
+`includeSalary` therefore:
+- forces `scrapeJobDetails` on, since salary is never on a search card;
+- **returns every job regardless**, with `salary: null` where pay was not disclosed.
+
+It deliberately does **not** filter. An earlier version discarded jobs without pay and over-fetched ~2x to compensate; a real run returned 195 rows instead of 400 and took 2m32s for 410 requests. Dropping rows makes the returned count depend on how many employers happened to disclose, which is not what `maxItems` should mean. `requireSalary` is still accepted as a legacy alias for `includeSalary`, but no longer discards anything.
+
+### Cost profile of a detail page
+Measured on 10 live fragments (avg 69 KB):
+
+| | ms | share |
+|---|---|---|
+| cheerio load (Crawlee does this, unavoidable) | 8.52 | 69% |
+| `parseJobDetails` | 4.61 | 37% |
+| — of which salary extraction | 1.04 | 8% |
+| **total per detail page** | **12.33** | |
+
+Salary parsing is not the bottleneck and never will be — the request count is. **Apify allocates 1 CPU core per 4 GB of memory**, so a 1 GB run gets ~0.25 core, and Crawlee's autoscaler then throttles concurrency under CPU pressure. For salary runs, raise the actor's memory before touching anything in the code.
 
 ## 6. Performance & Failure Insights
 - **~25% failed requests is normal.** LinkedIn returns HTTP 429 or serves bot-challenge/checkpoint pages, which the actor detects. At concurrency 10 without residential proxies this rate is expected; retries and exponential backoff absorb it.

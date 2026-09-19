@@ -205,16 +205,4 @@ export const DEFAULTS = {
     ERROR_RATE_MIN_SAMPLE: 10,
     ERROR_RATE_THRESHOLD: 0.3,
 
-    /**
-     * `requireSalary` can only be applied after a detail page is fetched, since
-     * search cards carry no salary markup and LinkedIn ignores its own f_SB2
-     * salary filter on the guest endpoint. Reaching maxItems therefore means
-     * queuing more than maxItems and discarding the misses. These bound that
-     * over-fetch: start assuming half disclose, adapt to the observed rate, and
-     * never fan out more than MAX_OVERFETCH x maxItems however bad it gets.
-     */
-    SALARY_RATE_INITIAL: 0.5,
-    SALARY_RATE_FLOOR: 0.15,
-    SALARY_RATE_MIN_SAMPLE: 20,
-    SALARY_MAX_OVERFETCH: 6,
 };

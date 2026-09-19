@@ -14,7 +14,8 @@ const {
     maxItems = 100,
     scrapeJobDetails = false,
     scrapeCompanyDetails = false,
-    requireSalary = false,             // Only keep jobs that disclose pay
+    includeSalary = false,             // Fetch pay for each job (costs one request per job)
+    requireSalary = false,             // Deprecated alias for includeSalary; no longer discards jobs
     datePosted = 'any',
     jobType = 'any',
     experienceLevel = 'any',
@@ -40,13 +41,16 @@ const {
 
 const { JOBS_PER_PAGE, MAX_SEARCH_OFFSET } = DEFAULTS;
 
-// Salary is never present on a search card - it lives on the job detail page,
-// and LinkedIn ignores its own f_SB2 salary filter on the guest endpoint. So
-// requireSalary cannot work without deep scraping. Enable it rather than let
-// the run return nothing at all.
-const scrapeDetails = scrapeJobDetails || requireSalary;
-if (requireSalary && !scrapeJobDetails) {
-    log.info('requireSalary is enabled, so job detail pages will be fetched: search result cards carry no salary data.');
+// Salary lives only on the job detail page - search cards carry none, and
+// LinkedIn ignores its own f_SB2 salary filter on the guest endpoint. So pay
+// costs one extra request per job, and that is the entire reason a run with
+// salary is slower. With it off, nothing below changes and the crawl stays on
+// the search-pages-only fast path.
+const wantSalary = includeSalary || requireSalary;
+const scrapeDetails = scrapeJobDetails || wantSalary;
+if (wantSalary && !scrapeJobDetails) {
+    log.info('Salary is enabled, so a job detail page is fetched per job. '
+        + 'This is much slower than the default: search result cards carry no pay data.');
 }
 
 log.info('Starting LinkedIn Jobs Scraper', {
@@ -55,7 +59,7 @@ log.info('Starting LinkedIn Jobs Scraper', {
     maxItems,
     scrapeJobDetails: scrapeDetails,
     scrapeCompanyDetails,
-    requireSalary,
+    includeSalary: wantSalary,
     resumeFromPreviousRun,
 });
 
@@ -74,27 +78,11 @@ let queuedItems = 0;      // Items queued (pushed + pending detail pages)
 const seenJobIds = new Set();     // Deduplication across search queries (and, optionally, prior runs)
 const seenCompanyIds = new Set(); // Deduplication of company page requests
 
-// Salary-filter accounting. `queueCeiling()` uses these to decide how far to
-// over-fetch so that maxItems is still reached after the misses are discarded.
+// Disclosure counters, reported at the end of the run. Purely informational:
+// nothing is discarded on account of salary, so maxItems means the same thing
+// whether pay is being fetched or not.
 let detailsSeen = 0;
 let detailsWithSalary = 0;
-let droppedNoSalary = 0;
-
-/**
- * How many items may be queued. Without requireSalary this is just maxItems.
- * With it, every detail page that discloses no pay is thrown away, so more has
- * to be queued than is wanted. The multiplier tracks the rate actually observed
- * rather than being fixed, because disclosure varies widely by query, location
- * and local pay-transparency law, and it is capped so a query where nobody
- * discloses cannot fan out indefinitely.
- */
-function queueCeiling() {
-    if (!requireSalary) return maxItems;
-    const rate = detailsSeen >= DEFAULTS.SALARY_RATE_MIN_SAMPLE
-        ? Math.max(detailsWithSalary / detailsSeen, DEFAULTS.SALARY_RATE_FLOOR)
-        : DEFAULTS.SALARY_RATE_INITIAL;
-    return Math.min(Math.ceil(maxItems / rate), maxItems * DEFAULTS.SALARY_MAX_OVERFETCH);
-}
 
 // Rolling counters used to decide when to throttle concurrency / send alert webhooks
 const rateLimitState = {
@@ -278,7 +266,7 @@ function buildWaveRequests(baseUrl, fromOffset, remaining) {
 }
 
 async function queueSearchWave(baseUrl, fromOffset) {
-    const remaining = queueCeiling() - queuedItems;
+    const remaining = maxItems - queuedItems;
     if (remaining <= 0 || fromOffset >= MAX_SEARCH_OFFSET) return 0;
     const requests = buildWaveRequests(baseUrl, fromOffset, remaining);
     if (requests.length > 0) await crawler.addRequests(requests);
@@ -383,9 +371,8 @@ crawler = new CheerioCrawler({
             const jobsToQueue = [];
             const jobsToPush = [];
 
-            const ceiling = queueCeiling();
             $('li').each((_index, element) => {
-                if (queuedItems >= ceiling) return false;
+                if (queuedItems >= maxItems) return false;
 
                 const jobData = parseJobListing($, element);
                 if (!jobData || !jobData.jobId) return;
@@ -417,8 +404,7 @@ crawler = new CheerioCrawler({
             if (jobsToQueue.length > 0) await crawler.addRequests(jobsToQueue);
 
             log.info(`Search page start=${offset}: ${jobsToPush.length} pushed, ` +
-                     `${jobsToQueue.length} queued for details. Progress: ${queuedItems}/${ceiling}` +
-                     (requireSalary ? ` (kept ${pushedItems}/${maxItems}, ${droppedNoSalary} without pay)` : ''));
+                     `${jobsToQueue.length} queued for details. Progress: ${queuedItems}/${maxItems}`);
 
             await persistSeenIds();
 
@@ -426,7 +412,7 @@ crawler = new CheerioCrawler({
             // Only the last page of a wave queues the next wave, and only if
             // this wave returned results. An empty page means the query is
             // exhausted, so we stop rather than walking to the 1000 ceiling.
-            if (isWaveEnd && found > 0 && queuedItems < queueCeiling() && pushedItems < maxItems) {
+            if (isWaveEnd && found > 0 && queuedItems < maxItems) {
                 const queued = await queueSearchWave(baseUrl, offset + JOBS_PER_PAGE);
                 if (queued > 0) log.debug(`Queued next wave of ${queued} search page(s).`);
             }
@@ -440,15 +426,9 @@ crawler = new CheerioCrawler({
             detailsSeen++;
             if (detailedData.salary) detailsWithSalary++;
 
-            if (requireSalary && !detailedData.salary) {
-                droppedNoSalary++;
-                log.debug(`Discarding ${request.url}: no pay disclosed.`);
-                return;
-            }
-            // Over-fetching for requireSalary can overshoot once the misses stop
-            // coming, so the cap is enforced here as well as at queue time.
-            if (requireSalary && pushedItems >= maxItems) return;
-
+            // Jobs with no pay disclosed are kept, with salary null. Dropping
+            // them would make the returned count depend on how many employers
+            // happened to disclose, which is not what maxItems should mean.
             await pushFiltered(detailedData);
             pushedItems++;
 
@@ -497,12 +477,6 @@ crawler = new CheerioCrawler({
 
         // If a detail page fails, push the listing data we already have
         if (request.userData?.label === LABELS.DETAIL && request.userData?.jobData) {
-            // A partial record carries only listing fields, which never include
-            // salary, so it cannot satisfy requireSalary.
-            if (requireSalary && !request.userData.jobData.salary) {
-                droppedNoSalary++;
-                return;
-            }
             log.warning(`Pushing partial data for failed detail page: ${request.url}`);
             await pushFiltered({
                 ...request.userData.jobData,
@@ -516,7 +490,7 @@ crawler = new CheerioCrawler({
 // ─── Run ─────────────────────────────────────────────────────────────
 // Seed a full first wave per search URL, so page fetches are parallel from the
 // first tick rather than serialised behind parsing the previous page.
-const seedRequests = searchUrls.flatMap((baseUrl) => buildWaveRequests(baseUrl, 0, queueCeiling()));
+const seedRequests = searchUrls.flatMap((baseUrl) => buildWaveRequests(baseUrl, 0, maxItems));
 log.info(`Seeded ${seedRequests.length} search page request(s) across ${searchUrls.length} query/queries.`);
 
 await crawler.run(seedRequests);
@@ -535,12 +509,8 @@ log.info(`✅ Scraping complete. Total jobs scraped: ${pushedItems}`, {
 
 if (detailsSeen > 0) {
     const disclosureRate = (detailsWithSalary / detailsSeen) * 100;
-    log.info(`Pay disclosed on ${detailsWithSalary}/${detailsSeen} job(s) (${disclosureRate.toFixed(1)}%).`
-        + (requireSalary ? ` Discarded ${droppedNoSalary} without pay.` : ''));
-    if (requireSalary && pushedItems < maxItems) {
-        log.warning(`Returned ${pushedItems} of ${maxItems} requested: not enough postings disclosed pay. `
-            + 'Broadening the search or the location usually helps, as disclosure varies by local law.');
-    }
+    log.info(`Pay disclosed on ${detailsWithSalary}/${detailsSeen} job(s) (${disclosureRate.toFixed(1)}%). `
+        + 'The rest are returned with salary null.');
 }
 
 if (notifyOnCompletion) {
