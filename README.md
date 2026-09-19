@@ -1,6 +1,8 @@
 # Fast LinkedIn Jobs Scraper
 
-Extract LinkedIn job listings at scale over plain HTTP — up to 1,000 jobs per search in under a minute, with no login, cookies, or browser required.
+**Purpose-built for rapid results.** Extract LinkedIn job listings at scale over plain HTTP — up to 1,000 jobs per search in under a minute, with no login, cookies, or browser required.
+
+Every design decision in this Actor was made to minimise time-to-results: no browser, no page rendering, and search pages fetched in parallel rather than one after another.
 
 ---
 
@@ -70,6 +72,14 @@ Each of these adds requests and increases runtime. All are `false` by default.
 | `includeSalary` | `boolean` | No | Fetch pay for each job. Adds one request per job. Jobs without disclosed pay are still returned with `salary: null`. | `true` |
 | `scrapeJobDetails` | `boolean` | No | Fetch full descriptions, skills, seniority, employment type, and apply links. Adds one request per job. | `true` |
 | `scrapeCompanyDetails` | `boolean` | No | Fetch company industry, size, and website. Adds one request per unique company. | `true` |
+
+> ### ⚠️ Caution: enabling `includeSalary` will slow the run considerably
+>
+> **LinkedIn does not expose salary as a structured field on its job listings.** There is no salary tag to read — pay is usually written into the job description itself, as ordinary prose among the responsibilities and benefits.
+>
+> Recovering it therefore means opening every job posting individually and parsing the salary out of plain text, rather than reading a clean value. That is roughly **10× the requests**, so a run that normally finishes in under a minute can take several minutes.
+>
+> Leave this **off** for fast bulk collection. Turn it on only when pay is the point of the search.
 
 ### Performance and output control
 
