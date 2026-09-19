@@ -8,7 +8,7 @@ import { parseJobListing, parseJobDetails } from './parsers.js';
 import {
     buildSearchUrls, cleanText, extractJobId, detectWorkplaceType, extractCompanyId,
     extractCompanyKey, parseSalary, parseLocation, isChallengePage, filterOutputFields,
-    buildPaginationUrls, canonicalizeUrl,
+    buildPaginationUrls, canonicalizeUrl, extractSalaryFromText, isPlausibleSalary,
 } from './utils.js';
 
 // ─── Sample HTML ─────────────────────────────────────────────────────
@@ -187,6 +187,54 @@ assertEqual(salary4.raw, null, 'raw is null for null salary');
 const salary5 = parseSalary('Competitive');
 assertEqual(salary5.min, null, 'returns null min when no numbers present');
 assertEqual(salary5.raw, 'Competitive', 'still preserves raw text');
+
+// ─── Test: isPlausibleSalary ─────────────────────────────────────────
+console.log('\n🧪 Testing isPlausibleSalary()');
+assert(isPlausibleSalary({ min: 90250, max: 120000, period: 'yearly' }), 'accepts a normal yearly range');
+assert(isPlausibleSalary({ min: 25, max: 40, period: 'hourly' }), 'accepts a normal hourly range');
+assert(!isPlausibleSalary({ min: 250, max: 250, period: 'yearly' }), 'rejects "$250B" parsed as 250/yr');
+assert(!isPlausibleSalary({ min: 10, max: 20, period: 'yearly' }), 'rejects "$10 million - $20 million" funding');
+assert(!isPlausibleSalary({ min: 5000, max: 50000000, period: 'yearly' }), 'rejects an absurd upper bound');
+assert(!isPlausibleSalary({ min: null, max: null, period: 'yearly' }), 'rejects an unparsed salary');
+assert(!isPlausibleSalary(null), 'handles null');
+
+// ─── Test: extractSalaryFromText ─────────────────────────────────────
+// LinkedIn wraps pay in a dedicated element for only a minority of postings;
+// for the rest it sits in the description prose, which is also full of currency
+// figures that are not pay.
+console.log('\n🧪 Testing extractSalaryFromText()');
+assertEqual(
+    extractSalaryFromText('The base salary range for this role is $91,800.00 - $137,600.00 depending on location.'),
+    '$91,800.00 - $137,600.00',
+    'extracts a range introduced by "base salary"',
+);
+assertEqual(
+    extractSalaryFromText('Compensation: $195,000 - $255,000 plus equity.'),
+    '$195,000 - $255,000',
+    'extracts a range introduced by "compensation"',
+);
+assertEqual(
+    extractSalaryFromText('This position pays $45/hr - $60/hr.'),
+    '$45/hr - $60/hr',
+    'extracts an hourly range',
+);
+assertEqual(
+    extractSalaryFromText('We have protected over $250B+ in funds related to residential property transactions.'),
+    null,
+    'ignores funds protected, which is not pay',
+);
+assertEqual(
+    extractSalaryFromText('We raised $10 million - $20 million in our Series B.'),
+    null,
+    'ignores funding rounds',
+);
+assertEqual(extractSalaryFromText(''), null, 'handles empty text');
+assertEqual(extractSalaryFromText(null), null, 'handles null');
+assertEqual(
+    extractSalaryFromText('We have protected over $250B+ in funds. The salary range is $120,000 - $150,000.'),
+    '$120,000 - $150,000',
+    'prefers the pay-anchored range over an earlier currency figure',
+);
 
 // ─── Test: parseLocation ──────────────────────────────────────────────
 console.log('\n🧪 Testing parseLocation()');
@@ -374,6 +422,38 @@ const fallbackJob = parseJobDetails($detail, emptyBase);
 assertEqual(fallbackJob.title, 'Senior Software Engineer', 'falls back to detail page title');
 assertEqual(fallbackJob.company, 'Acme Corp', 'falls back to detail page company');
 
+
+// ─── parseJobDetails() salary ─────────────────────────────────────────
+console.log('\n🧪 Testing parseJobDetails() salary');
+const SALARY_BLOCK_HTML = `<div class="decorated-job-posting__details">
+  <h3 class="compensation__heading">Base pay range</h3>
+  <div class="salary compensation__salary">$90,250.00/yr - $120,000.00/yr</div>
+  <div class="description__text"><div class="show-more-less-html__markup">Great role.</div></div>
+</div>`;
+const blockJob = parseJobDetails(load(SALARY_BLOCK_HTML), { title: 'T', company: 'C', salary: null });
+assertEqual(blockJob.salarySource, 'compensation', 'reads the structured compensation block');
+assertEqual(blockJob.salary.min, 90250, 'parses min from the compensation block');
+assertEqual(blockJob.salary.max, 120000, 'parses max from the compensation block');
+assertEqual(blockJob.salary.period, 'yearly', 'reads the period from the /yr suffix');
+
+const DESC_SALARY_HTML = `<div class="decorated-job-posting__details">
+  <div class="description__text"><div class="show-more-less-html__markup">
+    About us. The expected base salary for this role is $107,800.00 - $157,400.00 per year.
+  </div></div>
+</div>`;
+const descJob = parseJobDetails(load(DESC_SALARY_HTML), { title: 'T', company: 'C', salary: null });
+assertEqual(descJob.salarySource, 'description', 'falls back to the description prose');
+assertEqual(descJob.salary.min, 107800, 'parses min from the description');
+assertEqual(descJob.salary.max, 157400, 'parses max from the description');
+
+const NO_SALARY_HTML = `<div class="decorated-job-posting__details">
+  <div class="description__text"><div class="show-more-less-html__markup">
+    We protected over $250B+ in funds. Benefits include a competitive salary and unlimited PTO.
+  </div></div>
+</div>`;
+const noSalaryJob = parseJobDetails(load(NO_SALARY_HTML), { title: 'T', company: 'C', salary: null });
+assertEqual(noSalaryJob.salary, null, 'leaves salary null when only non-pay figures are present');
+assertEqual(noSalaryJob.salarySource, null, 'leaves salarySource null when no pay is found');
 
 // ─── buildPaginationUrls() ────────────────────────────────────────────
 console.log('\n🧪 Testing buildPaginationUrls()');

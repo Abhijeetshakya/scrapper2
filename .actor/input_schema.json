@@ -8,8 +8,12 @@
             "type": "array",
             "description": "Job titles or keywords to search for. Each query is searched separately and results are de-duplicated across them.",
             "editor": "stringList",
-            "prefill": ["Software Engineer"],
-            "default": ["Software Engineer"],
+            "prefill": [
+                "Software Engineer"
+            ],
+            "default": [
+                "Software Engineer"
+            ],
             "sectionCaption": "Search"
         },
         "location": {
@@ -42,8 +46,18 @@
             "description": "Only return jobs posted within this window.",
             "editor": "select",
             "default": "any",
-            "enum": ["any", "past24hours", "pastWeek", "pastMonth"],
-            "enumTitles": ["Any time", "Past 24 hours", "Past week", "Past month"],
+            "enum": [
+                "any",
+                "past24hours",
+                "pastWeek",
+                "pastMonth"
+            ],
+            "enumTitles": [
+                "Any time",
+                "Past 24 hours",
+                "Past week",
+                "Past month"
+            ],
             "sectionCaption": "Filters"
         },
         "jobType": {
@@ -52,8 +66,22 @@
             "description": "Filter by employment type.",
             "editor": "select",
             "default": "any",
-            "enum": ["any", "fullTime", "partTime", "contract", "temporary", "internship"],
-            "enumTitles": ["Any", "Full-time", "Part-time", "Contract", "Temporary", "Internship"]
+            "enum": [
+                "any",
+                "fullTime",
+                "partTime",
+                "contract",
+                "temporary",
+                "internship"
+            ],
+            "enumTitles": [
+                "Any",
+                "Full-time",
+                "Part-time",
+                "Contract",
+                "Temporary",
+                "Internship"
+            ]
         },
         "experienceLevel": {
             "title": "Experience Level",
@@ -61,8 +89,24 @@
             "description": "Filter by required experience level.",
             "editor": "select",
             "default": "any",
-            "enum": ["any", "internship", "entryLevel", "associate", "midSenior", "director", "executive"],
-            "enumTitles": ["Any", "Internship", "Entry level", "Associate", "Mid-Senior level", "Director", "Executive"]
+            "enum": [
+                "any",
+                "internship",
+                "entryLevel",
+                "associate",
+                "midSenior",
+                "director",
+                "executive"
+            ],
+            "enumTitles": [
+                "Any",
+                "Internship",
+                "Entry level",
+                "Associate",
+                "Mid-Senior level",
+                "Director",
+                "Executive"
+            ]
         },
         "remoteFilter": {
             "title": "Workplace Type",
@@ -70,8 +114,24 @@
             "description": "Filter by remote, on-site, or hybrid work.",
             "editor": "select",
             "default": "any",
-            "enum": ["any", "onSite", "remote", "hybrid"],
-            "enumTitles": ["Any", "On-site", "Remote", "Hybrid"]
+            "enum": [
+                "any",
+                "onSite",
+                "remote",
+                "hybrid"
+            ],
+            "enumTitles": [
+                "Any",
+                "On-site",
+                "Remote",
+                "Hybrid"
+            ]
+        },
+        "requireSalary": {
+            "title": "Only Jobs With Salary",
+            "type": "boolean",
+            "description": "Return only jobs that disclose pay. Salary is not present on LinkedIn search cards, so this automatically enables Deep Scrape: Job Details and costs one request per job. Roughly half of postings disclose pay, so reaching Maximum Items means scanning about twice as many jobs.",
+            "default": false
         },
         "scrapeJobDetails": {
             "title": "Deep Scrape: Job Details",
@@ -98,7 +158,9 @@
             "type": "object",
             "description": "Residential proxies are strongly recommended for large scrapes. LinkedIn blocks datacenter IPs aggressively.",
             "editor": "proxy",
-            "default": { "useApifyProxy": true },
+            "default": {
+                "useApifyProxy": true
+            },
             "sectionCaption": "Proxy and performance"
         },
         "maxConcurrency": {
@@ -169,5 +231,7 @@
             "default": false
         }
     },
-    "required": ["searchQueries"]
+    "required": [
+        "searchQueries"
+    ]
 }

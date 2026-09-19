@@ -7,6 +7,11 @@ import {
     SALARY_PERIOD_MAP,
     CURRENCY_SYMBOL_MAP,
     CHALLENGE_MARKERS,
+    SALARY_CONTEXT_KEYWORDS,
+    SALARY_SANITY_BOUNDS,
+    SALARY_RANGE_REGEX,
+    SALARY_SINGLE_REGEX,
+    SALARY_CONTEXT_WINDOW,
     DEFAULTS,
 } from './constants.js';
 
@@ -188,6 +193,84 @@ export function parseSalary(salaryText) {
     }
 
     return { min, max, currency, period, raw };
+}
+
+/**
+ * Decide whether a parsed salary is plausibly pay at all.
+ *
+ * The description-text fallback matches currency figures in prose, and prose is
+ * full of currency figures that are not pay: funds protected, revenue, contract
+ * sizes, 401(k) match ceilings. Checking the magnitude against the pay period
+ * rejects those cheaply - "$250B" parses to 250, which is not a yearly salary.
+ *
+ * @param {{min: number|null, max: number|null, period: string|null}} parsed
+ * @returns {boolean}
+ */
+export function isPlausibleSalary(parsed) {
+    if (!parsed || parsed.min === null || parsed.max === null) return false;
+    const bounds = SALARY_SANITY_BOUNDS[parsed.period ?? 'yearly'];
+    if (!bounds) return true;
+    if (parsed.min < bounds.min || parsed.max > bounds.max) return false;
+    return parsed.max >= parsed.min;
+}
+
+/**
+ * Recover a salary from free-text prose (a job description).
+ *
+ * LinkedIn only wraps pay in a dedicated element for a minority of postings.
+ * For the rest it is disclosed in the middle of the description body, which is
+ * why a job can show a salary on the site while the scraped record has none.
+ *
+ * Candidates are scored, not taken first-match-wins: a figure with a pay-related
+ * word shortly before it is far more likely to be pay than the first currency
+ * figure in the text, which is routinely a funding or revenue number in the
+ * company blurb up top. Every candidate must also survive `isPlausibleSalary`.
+ *
+ * @param {string} text - Description text
+ * @returns {string|null} The matched salary substring, or null
+ */
+export function extractSalaryFromText(text) {
+    const haystack = cleanText(text);
+    if (!haystack) return null;
+    const lower = haystack.toLowerCase();
+
+    const scoreMatch = (match) => {
+        // The number regexes end in [\d,.]*, so a figure that ends a sentence
+        // swallows the full stop: "$198,400." Trim it off the reported raw.
+        const raw = cleanText(match[0]).replace(/[.,;:]+$/, '');
+        if (!isPlausibleSalary(parseSalary(raw))) return null;
+
+        // A pay word shortly *before* the figure is the strongest signal. The
+        // first currency figure in a description is routinely a funding or
+        // revenue number in the company blurb, so position alone proves nothing.
+        const windowStart = Math.max(0, match.index - SALARY_CONTEXT_WINDOW);
+        const preceding = lower.slice(windowStart, match.index);
+        const hasContext = SALARY_CONTEXT_KEYWORDS.some((kw) => preceding.includes(kw));
+        const hasPeriodMarker = /\/\s*(?:yr|hr|mo|wk)|per\s+(?:year|hour|month|week|annum)|annually/i.test(raw);
+
+        const score = (hasContext ? 2 : 0) + (hasPeriodMarker ? 1 : 0);
+        // An unanchored figure in prose is not trusted at all.
+        return score === 0 ? null : { raw, score };
+    };
+
+    const best = (matches) => {
+        let winner = null;
+        for (const match of matches) {
+            const candidate = scoreMatch(match);
+            if (candidate && (!winner || candidate.score > winner.score)) winner = candidate;
+        }
+        return winner;
+    };
+
+    // Ranges are resolved before single figures, and a qualifying range always
+    // wins. Scoring them together lets a lone "$157,400.00 per year" outscore
+    // the "$107,800.00 - $157,400.00" range it is the upper half of, which
+    // silently collapses the range to its maximum.
+    const fromRange = best(haystack.matchAll(SALARY_RANGE_REGEX));
+    if (fromRange) return fromRange.raw;
+
+    const fromSingle = best(haystack.matchAll(SALARY_SINGLE_REGEX));
+    return fromSingle ? fromSingle.raw : null;
 }
 
 /**

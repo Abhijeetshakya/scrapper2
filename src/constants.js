@@ -86,6 +86,46 @@ export const SALARY_PERIOD_MAP = {
 };
 
 /**
+ * Words that signal a nearby currency figure is pay, rather than funding raised,
+ * revenue, contract value, or a benefit allowance. Used to score candidate
+ * matches when salary has to be recovered from free-text description prose.
+ */
+export const SALARY_CONTEXT_KEYWORDS = [
+    'salary', 'compensation', 'pay range', 'base pay', 'pay rate', 'paid',
+    'wage', 'per year', 'per hour', 'per annum', 'annually', 'hourly rate',
+    'base salary', 'total compensation', 'remuneration', 'ctc', 'earn',
+];
+
+/**
+ * Plausible bounds per pay period, used to reject figures that parse cleanly but
+ * cannot be pay - "$250B+ in funds", "raised $10 million - $20 million", or a
+ * "$5,000 - $10,000" benefit allowance sitting in the same paragraph.
+ */
+export const SALARY_SANITY_BOUNDS = {
+    hourly: { min: 2, max: 2_000 },
+    daily: { min: 20, max: 20_000 },
+    weekly: { min: 100, max: 100_000 },
+    monthly: { min: 500, max: 500_000 },
+    yearly: { min: 10_000, max: 10_000_000 },
+};
+
+/**
+ * A currency range ("$150,000 - $200,000", "$90,250.00/yr - $120,000.00/yr",
+ * "$70K to $90K"). Ranges are matched before single figures because a lone
+ * number in prose is far more often not pay.
+ */
+export const SALARY_RANGE_REGEX = /[$€£₹¥]\s?\d[\d,.]*\s*[kK]?(?:\s*\/\s*(?:yr|hr|mo|wk|year|hour|month|week))?\s*(?:-|–|—|to)\s*[$€£₹¥]?\s?\d[\d,.]*\s*[kK]?(?:\s*\/\s*(?:yr|hr|mo|wk|year|hour|month|week))?/gi;
+
+/**
+ * A single figure carrying an explicit pay period ("$120,000 per year",
+ * "$45/hr"). Only trusted with the period marker attached.
+ */
+export const SALARY_SINGLE_REGEX = /[$€£₹¥]\s?\d[\d,.]*\s*[kK]?\s*(?:\/\s*(?:yr|hr|mo|wk)|per\s+(?:year|hour|month|week|annum)|annually|an hour|a year)/gi;
+
+/** How far back to look for a context keyword when scoring a description match. */
+export const SALARY_CONTEXT_WINDOW = 220;
+
+/**
  * Currency symbol/prefix to ISO 4217 code mapping, used for structured salary parsing.
  * Longer/more specific prefixes (e.g. "C$") are checked before shorter ones (e.g. "$").
  */
@@ -164,4 +204,17 @@ export const DEFAULTS = {
     /** Minimum attempts before the error rate is trusted enough to act on. */
     ERROR_RATE_MIN_SAMPLE: 10,
     ERROR_RATE_THRESHOLD: 0.3,
+
+    /**
+     * `requireSalary` can only be applied after a detail page is fetched, since
+     * search cards carry no salary markup and LinkedIn ignores its own f_SB2
+     * salary filter on the guest endpoint. Reaching maxItems therefore means
+     * queuing more than maxItems and discarding the misses. These bound that
+     * over-fetch: start assuming half disclose, adapt to the observed rate, and
+     * never fan out more than MAX_OVERFETCH x maxItems however bad it gets.
+     */
+    SALARY_RATE_INITIAL: 0.5,
+    SALARY_RATE_FLOOR: 0.15,
+    SALARY_RATE_MIN_SAMPLE: 20,
+    SALARY_MAX_OVERFETCH: 6,
 };

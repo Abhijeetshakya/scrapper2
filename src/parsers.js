@@ -1,4 +1,4 @@
-import { cleanText, extractJobId, detectWorkplaceType, parseSalary, parseLocation, canonicalizeUrl } from './utils.js';
+import { cleanText, extractJobId, detectWorkplaceType, parseSalary, parseLocation, canonicalizeUrl, extractSalaryFromText } from './utils.js';
 import { LINKEDIN_BASE } from './constants.js';
 
 /**
@@ -149,6 +149,44 @@ export function parseJobDetails($, jobData) {
     const descriptionHtml = $description.html();
     const description = cleanText($description.text());
 
+    // ─── Salary ──────────────────────────────────────────────────
+    // LinkedIn wraps pay in a dedicated compensation block for only a minority
+    // of postings; for the rest it is disclosed inside the description prose.
+    // That gap is why a posting can show a salary on the site while the scraped
+    // record has none - the search card carries no salary markup at all.
+    //
+    // This parser runs against the /jobs-guest/jobs/api/jobPosting/ fragment,
+    // which is safe to read salary from. The full /jobs/view/ page is NOT: it
+    // also carries main-job-card__salary-info and aside-job-card__salary-info
+    // for unrelated "similar jobs", so scraping salary there would attach
+    // another company's pay to this record.
+    // Selector precedence has to be explicit: .first() on a multi-selector
+    // returns the earliest match in DOM order, and .compensation__salary-range
+    // is the wrapper around both the "Base pay range" heading and the figure,
+    // so it would win and drag the heading into the raw text.
+    let salaryBlock = cleanText($('.salary.compensation__salary, .compensation__salary').first().text());
+    if (!salaryBlock) {
+        const $range = $('.compensation__salary-range').first().clone();
+        $range.find('.compensation__heading').remove();
+        salaryBlock = cleanText($range.text());
+    }
+
+    let salary = null;
+    let salarySource = null;
+    if (salaryBlock) {
+        salary = parseSalary(salaryBlock);
+        salarySource = 'compensation';
+    } else if (jobData.salary) {
+        salary = jobData.salary;
+        salarySource = 'listing';
+    } else {
+        const fromDescription = extractSalaryFromText(description);
+        if (fromDescription) {
+            salary = parseSalary(fromDescription);
+            salarySource = 'description';
+        }
+    }
+
     // ─── Job Criteria (seniority, type, function, industry) ──────
     const criteria = {};
     $('.description__job-criteria-item, .job-criteria__item').each((_, el) => {
@@ -227,6 +265,11 @@ export function parseJobDetails($, jobData) {
         jobFunction: criteria.jobFunction || null,
         industries: criteria.industries || null,
         skills: skills.length > 0 ? skills : null,
+        salary,
+        // Where the figure came from, so a consumer can weigh how much to trust
+        // it: 'compensation' is LinkedIn's structured block, 'description' was
+        // recovered from prose, 'listing' came off the search card.
+        salarySource,
         applicants: applicantsText || null,
         companyUrl: companyUrl || null,
         easyApply,

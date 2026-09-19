@@ -82,6 +82,15 @@
                 "title": "Salary",
                 "description": "Parsed salary object with min, max, currency, period and raw text. Null when the posting lists no salary."
             },
+            "salarySource": {
+                "type": [
+                    "string",
+                    "null"
+                ],
+                "title": "Salary Source",
+                "description": "Where the salary came from: 'compensation' is LinkedIn's structured pay block, 'description' was recovered from the description prose, 'listing' came off the search card. Null when no pay was found.",
+                "example": "compensation"
+            },
             "postedDate": {
                 "type": [
                     "string",
@@ -339,6 +348,8 @@
                 "fields": [
                     "title",
                     "company",
+                    "salary",
+                    "salarySource",
                     "seniorityLevel",
                     "employmentType",
                     "jobFunction",
@@ -359,6 +370,14 @@
                     },
                     "company": {
                         "label": "Company",
+                        "format": "text"
+                    },
+                    "salary": {
+                        "label": "Salary",
+                        "format": "object"
+                    },
+                    "salarySource": {
+                        "label": "Salary Source",
                         "format": "text"
                     },
                     "seniorityLevel": {

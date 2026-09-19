@@ -56,12 +56,38 @@ A previous version of this file claimed Apify's dataset table cannot render imag
 
 4. **Missing inputs.** `main.js` reads `jobType`, `experienceLevel`, `startUrls`, `outputFields`, `resumeFromPreviousRun`, `webhookUrl`, `notifyOnCompletion`, `maxConcurrency`, `requestsPerMinuteMultiplier`, `maxRequestRetries`, `paginationBatchSize`, and the request-delay options — none were in `input_schema.json`, so they were unreachable from the Apify UI. All are now exposed, grouped into sections. `errorRateThreshold` remains API/JSON-only because Apify input schemas have no float type (only `integer`).
 
-## 5. Performance & Failure Insights
+## 5. Salary Extraction — verified against live LinkedIn HTML
+
+Salary came back `null` for every row because **LinkedIn search result cards contain no salary markup at all**. Confirmed by fetching the live guest search endpoint: zero `salary`/`compensation` classes in the response. The listing parser's salary code could never have matched anything.
+
+Measured on 10 live job detail fragments:
+
+| Where the pay actually is | Count |
+|---|---|
+| `.salary.compensation__salary` structured block | 1 |
+| Description prose only | 4 |
+| Not disclosed at all | 5 |
+
+So pay is disclosed on about half of postings, but **only a fifth of those use the structured block** — the rest bury it in the description body. That is why a job shows a salary on the site while the scraped record has none.
+
+`parseJobDetails` now resolves salary as: compensation block → listing value → description prose, and records which one in `salarySource` (`'compensation'` | `'description'` | `'listing'` | `null`).
+
+### Two traps, both verified
+1. **Never read salary from the full `/jobs/view/` page.** It carries `main-job-card__salary-info` and `aside-job-card__salary-info` for unrelated "similar jobs" in the sidebar — scraping those attaches another company's pay to the record. The `/jobs-guest/jobs/api/jobPosting/` fragment the actor uses has none of these and is safe.
+2. **Description prose is full of currency figures that are not pay** — funds protected, funding rounds, transaction values. `extractSalaryFromText()` requires a pay-context keyword within 220 chars before the figure (or an explicit `/yr`-style marker) and range-checks the magnitude against the pay period via `isPlausibleSalary()`. A real posting reading "protected over $250B+ in funds" correctly yields no salary. Ranges are always resolved before single figures, otherwise a lone "$157,400 per year" outscores the "$107,800 - $157,400" range it is the upper half of and silently collapses it.
+
+### `requireSalary` input
+LinkedIn's own salary filter (`f_SB2`) is **ignored by the guest endpoint** — verified by diffing result sets with and without it, which were identical. So the filter has to be client-side, after the detail page is fetched. Consequences:
+
+- It forces `scrapeJobDetails` on, since salary is never on a search card.
+- Reaching `maxItems` requires queuing more than `maxItems`. `queueCeiling()` in `main.js` adapts to the observed disclosure rate, floors it at 15%, and hard-caps the fan-out at 6x so a query where nobody discloses still terminates.
+
+## 6. Performance & Failure Insights
 - **~25% failed requests is normal.** LinkedIn returns HTTP 429 or serves bot-challenge/checkpoint pages, which the actor detects. At concurrency 10 without residential proxies this rate is expected; retries and exponential backoff absorb it.
 - **300 results in 8 seconds** (37.5 jobs/sec) is extremely fast. Browser-based scrapers typically need 60–120+ seconds for the same work. The runtime is bound by network latency (200–500ms per LinkedIn request) and retry backoff, not CPU parsing.
 - Local CPU benchmarks on the parsing logic reached **607 jobs/second** with pre-queued pagination and concurrency 10.
 
-## 6. Key Architecture Notes for Other AIs
+## 7. Key Architecture Notes for Other AIs
 - Code on `main` is up to date.
 - **Pagination is pre-queued in waves**, not discovered serially. LinkedIn's `start` offsets are deterministic (0, 25, 50…), so page N+1 never needs page N parsed first. Serial discovery would force the whole search phase through one request at a time regardless of `maxConcurrency`. Only the last page of a wave queues the next, so waves never overlap.
 - **Retry backoff uses full jitter** (`Math.random() * ceiling`), not exponential-plus-small-jitter. With N concurrent workers, near-deterministic backoff makes blocked requests retry in lockstep and burst a host that is already pushing back.
@@ -69,4 +95,4 @@ A previous version of this file claimed Apify's dataset table cannot render imag
 - `salary` is a **JSON object or `null`**, never a raw string.
 - `companyId`, `isReposted`, and `salaryParsed` do not exist on job records.
 - `extractCompanyId()` is still used for company records; `extractCompanyKey()` is what deduplication actually runs on.
-- Test suite: **137/137 passing** (`npm test`).
+- Test suite: **161/161 passing** (`npm test`).

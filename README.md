@@ -26,6 +26,7 @@ This Apify actor scrapes job listings from LinkedIn's public guest-accessible en
 | `jobType` | `enum` | `"any"` | `any`, `fullTime`, `partTime`, `contract`, `temporary`, `internship` |
 | `experienceLevel` | `enum` | `"any"` | `any`, `internship`, `entryLevel`, `associate`, `midSenior`, `director`, `executive` |
 | `remoteFilter` | `enum` | `"any"` | `any`, `onSite`, `remote`, `hybrid` |
+| `requireSalary` | `boolean` | `false` | Only return jobs that disclose pay. Forces `scrapeJobDetails`. |
 | `maxConcurrency` | `integer` | `5` | Concurrent requests (1–20) |
 | `proxyConfiguration` | `object` | — | Apify proxy settings |
 | `resumeFromPreviousRun` | `boolean` | `false` | Skip jobs/companies already scraped in a prior run (persisted in the key-value store) |
