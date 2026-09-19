@@ -106,13 +106,8 @@ export function parseJobListing($, element) {
     const workplaceType = detectWorkplaceType(location);
 
     // ─── Company Logo ────────────────────────────────────────────
-    // Wrap the logo URL in an <img> tag so Apify's table view renders
-    // it as an actual image instead of a raw URL string.
     const $logo = $target.find('img.artdeco-entity-image, .search-entity-media img, img[data-delayed-url]');
-    const logoUrl = $logo.attr('data-delayed-url') || $logo.attr('src') || null;
-    const companyLogo = logoUrl
-        ? `<img src="${logoUrl}" alt="${company || 'Company'} Logo" width="48" height="48">`
-        : null;
+    const companyLogo = $logo.attr('data-delayed-url') || $logo.attr('src') || null;
 
     return {
         jobId,
@@ -188,17 +183,8 @@ export function parseJobDetails($, jobData) {
     );
 
     // ─── Company Logo (fallback to detail page if listing had none) ─
-    // If the listing already has an <img> tag we keep it; otherwise build one
-    // from the detail page's logo URL.
-    let companyLogo = jobData.companyLogo || null;
-    if (!companyLogo) {
-        const $detailLogo = $('.top-card-layout__entity-image, img.top-card-layout__entity-image, .artdeco-entity-image');
-        const detailLogoUrl = $detailLogo.attr('data-delayed-url') || $detailLogo.attr('src') || null;
-        if (detailLogoUrl) {
-            const logoCompany = jobData.company || detailCompany || 'Company';
-            companyLogo = `<img src="${detailLogoUrl}" alt="${logoCompany} Logo" width="48" height="48">`;
-        }
-    }
+    const $detailLogo = $('.top-card-layout__entity-image, img.top-card-layout__entity-image, .artdeco-entity-image');
+    const companyLogo = jobData.companyLogo || $detailLogo.attr('data-delayed-url') || $detailLogo.attr('src') || null;
 
     // ─── Required Skills / Qualifications ───────────────────────────
     // LinkedIn surfaces these as a distinct list, separate from the free-text description
