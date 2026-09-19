@@ -256,10 +256,15 @@ export function parseCompanyDetails($, companyId, companyUrl) {
 
     const website = $('a[data-tracking-control-name*="about_website"]').attr('href') || null;
 
+    const description = cleanText(
+        $('[data-test-id="about-us__description"], .core-section-container__content p, .about-us__description').text()
+    );
+
     return {
         companyId: companyId || null,
         companyUrl: companyUrl || null,
         name: name || null,
+        description: description || null,
         industry,
         companySize,
         website,
