@@ -1,0 +1,19 @@
+{
+  "name": "linkedin-jobs-scraper",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Fast Apify actor to scrape LinkedIn job listings using HTTP-only requests. No login required.",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node src/test.js",
+    "bench": "node bench/e2e.mjs",
+    "bench:parse": "node bench/parse.mjs"
+  },
+  "dependencies": {
+    "apify": "^3.2.6",
+    "crawlee": "^3.12.1",
+    "cheerio": "^1.0.0"
+  },
+  "author": "",
+  "license": "ISC"
+}
