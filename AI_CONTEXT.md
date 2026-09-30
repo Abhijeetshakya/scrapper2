@@ -126,3 +126,12 @@ With `JOBS_PER_PAGE: 10`, pagination walks `0,10,…,990` — 100 pages, **1000 
 - `companyId`, `isReposted`, and `salaryParsed` do not exist on job records.
 - `extractCompanyId()` is still used for company records; `extractCompanyKey()` is what deduplication actually runs on.
 - Test suite: **163/163 passing** (`npm test`).
+
+
+## 9. September 30 scheduling update (supersedes wave/throttle notes above)
+
+- `src/scheduling.js` now manages a bounded pending-page window per query. Every completed or terminally failed page can refill it; pagination no longer depends on a designated final page. Nonempty duplicate-only pages continue pagination. Empty pages stop new work for that query.
+- Error adaptation uses independent 10-outcome samples and a 15-second cooldown. Clean samples restore the concurrency ceiling by one, up to the configured maximum; CPU/memory autoscaling stays enabled. Historical failures no longer halve concurrency on every subsequent success.
+- Challenge pages are counted once in retry/final-failure handling, including Buffer bodies. HTTP blocking classification reads the Crawlee response status.
+- Initial desired concurrency is bounded by `maxConcurrency` and `paginationBatchSize`. Existing request-rate limits and backoff remain. Webhook requests have a 10-second timeout.
+- `npm test` runs the original 163 assertions plus scheduler regression tests. `npm run bench:actor` runs the actual actor against local fixtures. No live LinkedIn/Apify throughput has been measured for this update.

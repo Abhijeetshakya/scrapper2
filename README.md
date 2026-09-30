@@ -49,12 +49,12 @@ You get job titles, companies, logos, locations, workplace type, posting dates, 
 ## ⚙️ How it works
 
 1. Builds LinkedIn guest search URLs from your keywords, location, and filters.
-2. Queues result pages in parallel waves using deterministic `start` offsets, so throughput is not bottlenecked by sequential page discovery.
+2. Keeps a bounded window of result pages pending using deterministic `start` offsets. Each completed page replenishes the window, so a slow page does not stall pagination.
 3. Parses each job card from the returned HTML with Cheerio.
 4. Optionally fetches each job's detail page for descriptions, skills, seniority, and salary.
 5. De-duplicates by job ID across queries and pages, then writes structured records to the dataset.
 
-Blocked or rate-limited requests are retried with a fresh session and proxy using randomized backoff. If the rolling error rate exceeds 30%, concurrency is automatically reduced.
+Blocked or rate-limited requests are retried with a fresh session and proxy using randomized backoff. If more than 30% of a 10-outcome sample is blocked, concurrency is reduced, with at least 15 seconds between changes. Clean samples gradually restore the ceiling.
 
 ---
 
@@ -114,7 +114,7 @@ Each of these adds requests and increases runtime. All are `false` by default.
 | `resumeFromPreviousRun` | `boolean` | No | Skip jobs collected in earlier runs. Default `false`. | `true` |
 | `webhookUrl` | `string` | No | URL to POST run events to (`HIGH_ERROR_RATE`, `COMPLETED`). | `"https://example.com/hook"` |
 | `notifyOnCompletion` | `boolean` | No | Send a webhook when the run finishes. Default `false`. | `true` |
-| `paginationBatchSize` | `integer` | No | Result pages queued per parallel wave. Default `8`. Higher fetches more in parallel but over-fetches on short result sets. | `12` |
+| `paginationBatchSize` | `integer` | No | Maximum pending result pages per query. Default `8`. Refills after each page; higher values can over-fetch on short result sets. | `12` |
 | `requestDelayMinMs` | `integer` | No | Artificial minimum delay before each request, in ms. Default `0`. Leave at `0` — a delay here holds a concurrency slot open while it waits. | `0` |
 | `requestDelayMaxMs` | `integer` | No | Upper bound of the artificial delay. Default `0` (disabled). Only useful for targets needing jittered spacing. | `0` |
 
@@ -333,3 +333,10 @@ You are responsible for ensuring your use complies with applicable laws — incl
 ---
 
 ### ⚡ Built for speed. Try a run — most finish before you've read this page.
+
+
+### Reproducible actor performance check
+
+Run `npm run bench:actor` to execute the actual actor against a local HTTP fixture, with no LinkedIn requests or paid proxies. It verifies unique output, `maxItems`, duplicate-only pages, a failed page, and empty result pages. Fixtures use 10 jobs per page and inject a slow page every eighth offset.
+
+For a before/after comparison, save the earlier `src/main.js` beside the current entry point as `src/baseline-main.js`, then run `ACTOR_BASELINE="$PWD/src/baseline-main.js" npm run bench:actor`. Timings include Node/SDK startup and local dataset writes. They are local measurements, not a promise of LinkedIn throughput. The older `bench/e2e.mjs` compares historical configurations, not the current production entry point.

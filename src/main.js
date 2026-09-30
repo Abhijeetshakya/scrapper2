@@ -1,6 +1,7 @@
+import { SearchWindow, ConcurrencyController } from './scheduling.js';
 import { Actor } from 'apify';
 import { CheerioCrawler, log } from 'crawlee';
-import { buildSearchUrls, isChallengePage, filterOutputFields, buildPaginationUrls, extractCompanyKey, extractCompanyId } from './utils.js';
+import { buildSearchUrls, isChallengePage, filterOutputFields, extractCompanyKey, extractCompanyId } from './utils.js';
 import { parseJobListing, parseJobDetails, parseCompanyDetails } from './parsers.js';
 import { LABELS, LINKEDIN_BASE, BLOCKED_STATUS_CODES, DEFAULTS } from './constants.js';
 
@@ -138,6 +139,7 @@ async function notifyWebhook(event, payload = {}) {
     try {
         await fetch(webhookUrl, {
             method: 'POST',
+            signal: AbortSignal.timeout(10_000),
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 event,
@@ -193,84 +195,63 @@ async function queueCompanies(jobs) {
     if (requests.length > 0) await crawler.addRequests(requests);
 }
 
-/**
- * Track a request outcome for adaptive-concurrency purposes and, if the rolling
- * error rate crosses `errorRateThreshold`, halve the crawler's concurrency ceiling.
- * This intentionally only ever scales down; a fresh run/redeploy resets it.
- */
+const concurrencyController = new ConcurrencyController({
+    maxConcurrency,
+    threshold: errorRateThreshold,
+    sampleSize: DEFAULTS.ERROR_RATE_MIN_SAMPLE,
+});
+
 function recordAttempt({ blocked }) {
     rateLimitState.totalAttempts++;
     if (blocked) rateLimitState.blockedAttempts++;
-
-    // Only start judging the error rate once we have a reasonable sample size
-    if (rateLimitState.totalAttempts < DEFAULTS.ERROR_RATE_MIN_SAMPLE) return;
-
-    const errorRate = rateLimitState.blockedAttempts / rateLimitState.totalAttempts;
-    if (errorRate <= errorRateThreshold) return;
-
-    if (!rateLimitState.alertSent) {
+    const pool = crawler?.autoscaledPool;
+    if (!pool) return;
+    const current = pool.maxConcurrency;
+    const next = concurrencyController.record(blocked, current);
+    if (next === current) return;
+    pool.maxConcurrency = next;
+    if (pool.desiredConcurrency > next) pool.desiredConcurrency = next;
+    log.info(`Adjusting concurrency ceiling from ${current} to ${next}.`);
+    if (next < current && !rateLimitState.alertSent) {
         rateLimitState.alertSent = true;
-        log.warning(`Error rate ${(errorRate * 100).toFixed(1)}% exceeds threshold ${(errorRateThreshold * 100).toFixed(1)}%.`);
-        notifyWebhook('HIGH_ERROR_RATE', { errorRate, blockedAttempts: rateLimitState.blockedAttempts, totalAttempts: rateLimitState.totalAttempts });
-    }
-
-    if (crawler?.autoscaledPool) {
-        const current = crawler.autoscaledPool.maxConcurrency;
-        const reduced = Math.max(1, Math.floor(current / 2));
-        if (reduced < current) {
-            crawler.autoscaledPool.maxConcurrency = reduced;
-            log.warning(`Reducing concurrency from ${current} to ${reduced} due to high error rate.`);
-        }
+        void notifyWebhook('HIGH_ERROR_RATE', {
+            blockedAttempts: rateLimitState.blockedAttempts,
+            totalAttempts: rateLimitState.totalAttempts,
+            errorRate: rateLimitState.blockedAttempts / rateLimitState.totalAttempts,
+        });
     }
 }
 
-/** Offsets already queued per base search URL, so waves never overlap. */
-const queuedOffsets = new Map();
-
-/**
- * Queue the next wave of search-result pages for a base URL.
- *
- * LinkedIn's guest search paginates on a deterministic `start` offset, so page
- * N+1 never needed to be discovered by parsing page N. Serial discovery forced
- * the entire search phase through one request at a time no matter what
- * maxConcurrency was set to; pre-queuing lets the pool fetch pages in parallel.
- *
- * Queued in waves rather than all at once so a query with fewer results than
- * `maxItems` over-fetches by at most `paginationBatchSize` requests instead of
- * walking all the way to LinkedIn's 1000-result ceiling.
- */
-function buildWaveRequests(baseUrl, fromOffset, remaining) {
-    const already = queuedOffsets.get(baseUrl) ?? new Set();
-    const urls = buildPaginationUrls(baseUrl, fromOffset, paginationBatchSize, remaining)
-        .filter((url) => !already.has(url));
-    if (urls.length === 0) return [];
-
-    const lastUrl = urls[urls.length - 1];
-    const requests = urls.map((url) => {
-        already.add(url);
+const searchWindows = new Map();
+function buildSearchRequests(baseUrl) {
+    let window = searchWindows.get(baseUrl);
+    if (!window) {
+        const start = Number(new URL(baseUrl).searchParams.get('start') || 0);
+        if (!Number.isInteger(start) || start < 0) throw new Error('Invalid search start offset');
+        window = new SearchWindow({
+            size: paginationBatchSize,
+            pageSize: JOBS_PER_PAGE,
+            maxOffset: MAX_SEARCH_OFFSET,
+            startOffset: start,
+        });
+        searchWindows.set(baseUrl, window);
+    }
+    return window.take(maxItems - queuedItems).map((offset) => {
+        const url = new URL(baseUrl);
+        url.searchParams.set('start', String(offset));
         return {
-            url,
-            userData: {
-                label: LABELS.SEARCH,
-                baseUrl,
-                offset: Number(new URL(url).searchParams.get('start')),
-                // Only the final page of a wave queues the next one, so waves
-                // never overlap or fan out combinatorially.
-                isWaveEnd: url === lastUrl,
-            },
-            uniqueKey: url,
+            url: url.toString(),
+            uniqueKey: url.toString(),
+            userData: { label: LABELS.SEARCH, baseUrl, offset },
         };
     });
-    queuedOffsets.set(baseUrl, already);
-    return requests;
 }
 
-async function queueSearchWave(baseUrl, fromOffset) {
-    const remaining = maxItems - queuedItems;
-    if (remaining <= 0 || fromOffset >= MAX_SEARCH_OFFSET) return 0;
-    const requests = buildWaveRequests(baseUrl, fromOffset, remaining);
-    if (requests.length > 0) await crawler.addRequests(requests);
-    return requests.length;
+async function replenishSearch(request, empty = false) {
+    const { baseUrl, offset } = request.userData;
+    searchWindows.get(baseUrl)?.complete(offset, { empty });
+    const requests = buildSearchRequests(baseUrl);
+    if (requests.length) await crawler.addRequests(requests);
 }
 
 // ─── Build search URLs ──────────────────────────────────────────────
@@ -298,6 +279,7 @@ let crawler;
 crawler = new CheerioCrawler({
     proxyConfiguration,
     maxConcurrency,
+    autoscaledPoolOptions: { desiredConcurrency: Math.min(maxConcurrency, paginationBatchSize) },
     // More retries than the default: 429s are common and usually clear once a
     // fresh session/proxy plus backoff is applied.
     maxRequestRetries,
@@ -358,16 +340,16 @@ crawler = new CheerioCrawler({
         // ── Challenge / login-wall detection ───────────────────────
         // LinkedIn sometimes returns a 200 with a checkpoint or auth-wall page
         // instead of real content, so a status-code check alone isn't enough.
-        if (typeof body === 'string' && isChallengePage(body)) {
+        if (isChallengePage(Buffer.isBuffer(body) ? body.toString('utf8') : body)) {
             session?.retire();
-            recordAttempt({ blocked: true });
             throw new Error(`LinkedIn challenge/checkpoint page detected at ${request.url}`);
         }
         recordAttempt({ blocked: false });
 
         // ── SEARCH results page ──────────────────────────────────
         if (label === LABELS.SEARCH) {
-            const { baseUrl, offset, isWaveEnd } = request.userData;
+            const { offset } = request.userData;
+            let validCards = 0;
             const jobsToQueue = [];
             const jobsToPush = [];
 
@@ -377,6 +359,7 @@ crawler = new CheerioCrawler({
                 const jobData = parseJobListing($, element);
                 if (!jobData || !jobData.jobId) return;
 
+                validCards++;
                 // Deduplicate (also skips jobs already scraped in a previous run
                 // when resumeFromPreviousRun is enabled)
                 if (seenJobIds.has(jobData.jobId)) return;
@@ -394,8 +377,6 @@ crawler = new CheerioCrawler({
                 queuedItems++;
             });
 
-            const found = jobsToPush.length + jobsToQueue.length;
-
             if (jobsToPush.length > 0) {
                 await pushFiltered(jobsToPush);
                 pushedItems += jobsToPush.length;
@@ -408,14 +389,8 @@ crawler = new CheerioCrawler({
 
             await persistSeenIds();
 
-            // ── Paginate ─────────────────────────────────────────
-            // Only the last page of a wave queues the next wave, and only if
-            // this wave returned results. An empty page means the query is
-            // exhausted, so we stop rather than walking to the 1000 ceiling.
-            if (isWaveEnd && found > 0 && queuedItems < maxItems) {
-                const queued = await queueSearchWave(baseUrl, offset + JOBS_PER_PAGE);
-                if (queued > 0) log.debug(`Queued next wave of ${queued} search page(s).`);
-            }
+            // Refill on every completion, including duplicate-only pages.
+            await replenishSearch(request, validCards === 0 && queuedItems < maxItems);
 
         // ── DETAIL page ──────────────────────────────────────────
         } else if (label === LABELS.DETAIL) {
@@ -447,8 +422,8 @@ crawler = new CheerioCrawler({
 
     // Called on each failed attempt, before Crawlee decides whether to retry.
     // This is where 429-specific exponential backoff + concurrency throttling live.
-    async errorHandler({ request, session }, error) {
-        const statusCode = error?.response?.statusCode ?? error?.statusCode ?? null;
+    async errorHandler({ request, session, response }, error) {
+        const statusCode = response?.statusCode ?? error?.response?.statusCode ?? error?.statusCode ?? null;
         const looksRateLimited = BLOCKED_STATUS_CODES.includes(statusCode)
             || /challenge|checkpoint/i.test(error?.message || '');
 
@@ -472,7 +447,12 @@ crawler = new CheerioCrawler({
         }
     },
 
-    async failedRequestHandler({ request }, error) {
+    async failedRequestHandler({ request, response }, error) {
+        const status = response?.statusCode ?? error?.response?.statusCode ?? error?.statusCode;
+        if (BLOCKED_STATUS_CODES.includes(status) || /challenge|checkpoint/i.test(error?.message || '')) {
+            recordAttempt({ blocked: true });
+        }
+        if (request.userData?.label === LABELS.SEARCH) await replenishSearch(request);
         log.error(`Request failed: ${request.url}`, { error: error.message });
 
         // If a detail page fails, push the listing data we already have
@@ -488,9 +468,8 @@ crawler = new CheerioCrawler({
 });
 
 // ─── Run ─────────────────────────────────────────────────────────────
-// Seed a full first wave per search URL, so page fetches are parallel from the
-// first tick rather than serialised behind parsing the previous page.
-const seedRequests = searchUrls.flatMap((baseUrl) => buildWaveRequests(baseUrl, 0, maxItems));
+// Seed a bounded window per query; each completed page replenishes it.
+const seedRequests = [...new Set(searchUrls)].flatMap((baseUrl) => buildSearchRequests(baseUrl));
 log.info(`Seeded ${seedRequests.length} search page request(s) across ${searchUrls.length} query/queries.`);
 
 await crawler.run(seedRequests);
@@ -518,3 +497,4 @@ if (notifyOnCompletion) {
 }
 
 await Actor.exit();
+

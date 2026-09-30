@@ -192,10 +192,8 @@ export const DEFAULTS = {
     REQUEST_DELAY_MAX_MS: 0,
 
     /**
-     * Search pages queued per wave. Pagination offsets are deterministic
-     * (0, 25, 50, ...), so pages can be fetched in parallel rather than
-     * discovered one at a time. Waves cap how many wasted requests a
-     * short result set can cost.
+     * Maximum pending search pages per query. Offsets are deterministic
+     * (0, 10, 20, ...). Each completion refills this bounded window.
      */
     PAGINATION_BATCH_SIZE: 8,
 
@@ -214,3 +212,4 @@ export const DEFAULTS = {
     ERROR_RATE_THRESHOLD: 0.3,
 
 };
+

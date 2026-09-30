@@ -191,7 +191,7 @@
         "paginationBatchSize": {
             "title": "Pagination Batch Size",
             "type": "integer",
-            "description": "Search result pages queued per wave. Higher fetches more pages in parallel but over-fetches more on short result sets.",
+            "description": "Maximum pending search pages per query. Each completed page replenishes this window. Higher values allow more parallel work but may over-fetch on short result sets.",
             "editor": "number",
             "minimum": 1,
             "default": 8
@@ -236,3 +236,4 @@
         "searchQueries"
     ]
 }
+
