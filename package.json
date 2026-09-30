@@ -5,9 +5,10 @@
   "description": "Fast Apify actor to scrape LinkedIn job listings using HTTP-only requests. No login required.",
   "scripts": {
     "start": "node src/main.js",
-    "test": "node src/test.js",
+    "test": "node src/test.js && node --test test/*.test.js",
     "bench": "node bench/e2e.mjs",
-    "bench:parse": "node bench/parse.mjs"
+    "bench:parse": "node bench/parse.mjs",
+    "bench:actor": "node bench/actor.mjs"
   },
   "dependencies": {
     "apify": "^3.2.6",
